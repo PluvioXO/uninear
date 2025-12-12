@@ -39,17 +39,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: yarn
-          cache-dependency-path: frontend/yarn.lock
+          cache: 'npm'
       - name: Install dependencies
         working-directory: ./frontend
-        run: yarn install --frozen-lockfile
+        run: npm ci
       - name: Build
         working-directory: ./frontend
-        run: yarn build
+        run: npm run build
       - name: Lint
         working-directory: ./frontend
-        run: yarn lint
+        run: npm run lint
       - name: Test
         working-directory: ./frontend
-        run: yarn test
+        run: npm run test
