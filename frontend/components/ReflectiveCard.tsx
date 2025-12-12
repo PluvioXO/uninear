@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { Fingerprint, Activity, Lock } from 'lucide-react';
 
 interface ReflectiveCardProps {
@@ -30,37 +30,6 @@ const ReflectiveCard: React.FC<ReflectiveCardProps> = ({
   className = '',
   style = {}
 }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-
-    const startWebcam = async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            facingMode: 'user'
-          }
-        });
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (err) {
-        console.error('Error accessing webcam:', err);
-      }
-    };
-
-    startWebcam();
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
 
   const baseFrequency = 0.03 / Math.max(0.1, noiseScale);
   const saturation = 1 - Math.max(0, Math.min(1, grayscale));
@@ -127,15 +96,15 @@ const ReflectiveCard: React.FC<ReflectiveCardProps> = ({
         </defs>
       </svg>
 
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="absolute top-0 left-0 w-full h-full object-cover scale-[1.2] -scale-x-100 z-0 opacity-90 transition-[filter] duration-300"
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 z-0 opacity-90"
         style={{
+          backgroundImage:
+            "linear-gradient(120deg, rgba(168,85,247,0.35), rgba(59,130,246,0.35)), url('data:image/svg+xml,%3Csvg width%3D%22200%22 height%3D%22200%22 xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cfilter id%3D%22n%22 x%3D%220%22 y%3D%220%22 width%3D%22100%25%22 height%3D%22100%25%22%3E%3CfeTurbulence baseFrequency%3D%220.65%22 numOctaves%3D%223%22/%3E%3C/filter%3E%3Crect width%3D%22100%25%22 height%3D%22100%25%22 filter%3D%22url(%23n)%22 opacity%3D%220.45%22/%3E%3C/svg%3E')",
           filter:
-            'saturate(var(--saturation, 0)) contrast(120%) brightness(110%) blur(var(--blur-strength, 12px)) url(#metallic-displacement)'
+            'saturate(var(--saturation, 0)) contrast(120%) brightness(110%) blur(var(--blur-strength, 12px))',
+          backgroundSize: 'cover'
         }}
       />
 
