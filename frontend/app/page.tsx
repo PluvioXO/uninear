@@ -65,7 +65,7 @@ export default function Home() {
               <h2 className="text-4xl md:text-5xl font-bold mb-6">Secure Your Spot</h2>
               <p className="text-gray-400 text-lg mb-8">
                 Our new digital ID system ensures seamless entry to all exclusive university events. 
-                Just flash your reflective card and you're in.
+                Just flash your reflective card and you&apos;re in.
               </p>
               <ul className="space-y-4 text-gray-300">
                 <li className="flex items-center gap-3">
