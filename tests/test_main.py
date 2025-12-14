@@ -1,13 +1,16 @@
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+from fastapi.testclient import TestClient
+from src.main import app
 
-from main import add, multiply
+client = TestClient(app)
 
-def test_add():
-    assert add(2, 3) == 5
-    assert add(-1, 1) == 0
+# 1. Test that the API is alive
+def test_read_root():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "status" in response.json()
 
-def test_multiply():
-    assert multiply(2, 3) == 6
-    assert multiply(0, 5) == 0
+# 2. Test to see if we can fetch events (The Core Feature)
+def test_get_events():
+    response = client.get("/events")
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)

@@ -10,6 +10,9 @@ jobs:
   test-backend:
     name: Python Backend Tests
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.https://mqsfufdnzktvxtznxffb.supabase.co}}
+      SUPABASE_KEY: ${{ secrets.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xc2Z1ZmRuemt0dnh0em54ZmZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NDcwODAsImV4cCI6MjA4MTAyMzA4MH0.OD2OliN6BCI27MMPvPwV_isZVzuyWIMhFjJ_hw5rTPQ}}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.10
