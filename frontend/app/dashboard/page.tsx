@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
-import SpotlightCard from '@/components/SpotlightCard';
 
 // Types for our local data
 interface Event {
@@ -50,7 +49,7 @@ const INITIAL_EVENTS: Event[] = [
   },
   {
     id: 4,
-    title: 'Last Year\'s Ball',
+    title: 'Last Year&apos;s Ball',
     date: '2024-12-15T19:00',
     location: 'Grand Hotel',
     attendees: 350,
@@ -171,7 +170,7 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold mb-2">Dashboard</h1>
-            <p className="text-gray-400">Welcome back, here's what's happening with your society.</p>
+            <p className="text-gray-400">Welcome back, here&apos;s what&apos;s happening with your society.</p>
           </div>
           <div onClick={() => setIsCreateModalOpen(true)}>
             <MagneticButton
