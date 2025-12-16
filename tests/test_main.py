@@ -1,8 +1,15 @@
-from fastapi.testclient import TestClient
+import os
 import pytest
+from unittest.mock import MagicMock, patch
+
+# Set dummy env vars BEFORE importing src.main to avoid Database init error
+os.environ["SUPABASE_URL"] = "https://example.supabase.co"
+os.environ["SUPABASE_KEY"] = "dummy-key"
+
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from datetime import datetime
-from src.main import app, EventCreateSchema, EventUpdateSchema
+from src.main import app, EventCreateSchema, EventUpdateSchema, backend
 
 client = TestClient(app)
 
@@ -16,14 +23,18 @@ def test_read_root():
 
 # 2. Test to see if we can fetch events (The Core Feature)
 def test_get_events():
-    # This test assumes the DB is reachable. 
-    # In a real CI environment, we should mock the DB.
-    try:
+    # Mock the database response
+    mock_response = MagicMock()
+    mock_response.data = [{"id": 1, "title": "Mock Event"}]
+    
+    # We need to mock the chain: backend.db.client.table().select().execute()
+    with patch.object(backend.db.client, 'table') as mock_table:
+        mock_table.return_value.select.return_value.execute.return_value = mock_response
+        
         response = client.get("/events")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
-    except Exception:
-        pytest.skip("Database not available")
+        assert response.json()[0]["title"] == "Mock Event"
 
 # --- DATA MODEL TESTS ---
 
