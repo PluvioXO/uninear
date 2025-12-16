@@ -24,9 +24,9 @@ export default function Home() {
             <Link href="#" className="hover:text-purple-400 transition-colors">Societies</Link>
             <Link href="#" className="hover:text-purple-400 transition-colors">About</Link>
           </div>
-          <button className="bg-white text-black px-6 py-2 rounded-full font-medium hover:bg-purple-400 hover:text-white transition-colors">
+          <Link href="/login" className="bg-white text-black px-6 py-2 rounded-full font-medium hover:bg-purple-400 hover:text-white transition-colors">
             Sign In
-          </button>
+          </Link>
         </div>
       </nav>
 
@@ -44,8 +44,31 @@ export default function Home() {
             containerClassName="text-6xl md:text-8xl font-bold tracking-tighter mb-6"
             textClassName=""
           >
-            Societies Plan Better Together
+            Societies Plan Better
           </ScrollFloat>
+
+          {/* Separate element for 'Together' so we can render it on its own line with a hand-drawn underline */}
+          <h2 className="text-6xl md:text-8xl font-bold tracking-tighter mb-8">
+            <span className="relative inline-block">
+              <span className="relative z-10">Together</span>
+
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 200 24"
+                preserveAspectRatio="none"
+                className="absolute left-0 bottom-0 w-full h-6 pointer-events-none"
+                style={{ transform: 'translateY(6px)' }}
+              >
+                <defs>
+                  <linearGradient id="underline-grad" x1="0" x2="1">
+                    <stop offset="0%" stopColor="#c4b5fd" />
+                    <stop offset="100%" stopColor="#60a5fa" />
+                  </linearGradient>
+                </defs>
+                <path d="M2 14 C40 24,80 2,198 14" stroke="url(#underline-grad)" strokeWidth="3" fill="none" strokeLinecap="round" />
+              </svg>
+            </span>
+          </h2>
           
           <div className="text-2xl md:text-3xl text-gray-200 flex flex-col md:flex-row items-center justify-center gap-3 mb-6">
             <span className="uppercase tracking-[0.3em] text-xs md:text-sm text-purple-300">Instant Programs</span>
