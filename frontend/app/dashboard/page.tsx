@@ -172,7 +172,7 @@ export default function DashboardPage() {
             <h1 className="text-3xl md:text-4xl font-bold mb-2">Dashboard</h1>
             <p className="text-gray-400">Welcome back, here&apos;s what&apos;s happening with your society.</p>
           </div>
-          <div onClick={() => setIsCreateModalOpen(true)}>
+          <div onClick={() => setIsCreateModalOpen(true)} data-testid="create-event-trigger">
             <MagneticButton
               label="Create Event"
               className="bg-white text-black px-6"
