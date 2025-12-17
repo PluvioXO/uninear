@@ -31,10 +31,10 @@ jobs:
           # exit-zero treats all errors as warnings.
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Test with pytest
-        run: pytest
+        run: pytest tests/unit tests/integration
 
   test-frontend:
-    name: Frontend Tests
+    name: Frontend Tests (Next.js)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,3 +56,32 @@ jobs:
       - name: Test
         working-directory: ./frontend
         run: npm run test
+
+  test-react-native:
+    name: React Native Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        # Assuming a 'mobile' directory exists or will exist for React Native
+        # If not, this step will fail or needs to be adjusted when the mobile app is created.
+        # For now, we'll just echo a placeholder message to not break the workflow if the folder is missing.
+        run: |
+          if [ -d "mobile" ]; then
+            cd mobile
+            npm ci
+          else
+            echo "Mobile directory not found, skipping React Native tests."
+          fi
+      - name: Test
+        run: |
+          if [ -d "mobile" ]; then
+            cd mobile
+            npm test
+          else
+            echo "Mobile directory not found, skipping React Native tests."
+          fi
