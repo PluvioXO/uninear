@@ -1,36 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional, Any
-from datetime import datetime
 
 # Import the database connection
 from src.database import Database
 
 # --- MODELS ---
-class EventCreateSchema(BaseModel):
-    title: str
-    description: Optional[str] = None
-    date: datetime  # Frontend sends 'date'
-    location: str
-    capacity: int
-    price: float
-    status: str = "Draft"
-    
-    # Legacy/Optional fields
-    end_time: Optional[datetime] = None
-    mood_tags: List[str] = []
-    energy_level: Optional[str] = None
-    organiser_id: Optional[str] = None
-
-class EventUpdateSchema(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    date: Optional[datetime] = None
-    location: Optional[str] = None
-    capacity: Optional[int] = None
-    price: Optional[float] = None
-    status: Optional[str] = None
+from src.models import EventCreateSchema, EventUpdateSchema, UserSignupSchema, UserLoginSchema
 
 class UniNearBackend:
     def __init__(self):
@@ -54,6 +29,12 @@ class UniNearBackend:
 
     def setup_routes(self):
         self.app.get("/")(self.read_root)
+        
+        # Auth Routes
+        self.app.post("/auth/signup")(self.signup)
+        self.app.post("/auth/login")(self.login)
+
+        # Event Routes
         self.app.get("/events")(self.get_events)
         self.app.post("/events")(self.create_event)
         self.app.delete("/events/{event_id}")(self.delete_event)
@@ -95,6 +76,31 @@ class UniNearBackend:
 
             response = self.db.client.table("events").update(event_data).eq("id", event_id).execute()
             return response.data
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def signup(self, user: UserSignupSchema):
+        try:
+            response = self.db.client.auth.sign_up({
+                "email": user.email,
+                "password": user.password,
+                "options": {
+                    "data": {
+                        "full_name": user.full_name
+                    }
+                }
+            })
+            return response
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def login(self, user: UserLoginSchema):
+        try:
+            response = self.db.client.auth.sign_in_with_password({
+                "email": user.email,
+                "password": user.password
+            })
+            return response
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 

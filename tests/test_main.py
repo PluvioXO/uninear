@@ -9,7 +9,8 @@ os.environ["SUPABASE_KEY"] = "dummy-key"
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from datetime import datetime
-from src.main import app, EventCreateSchema, EventUpdateSchema, backend
+from src.main import app, backend
+from src.models import EventCreateSchema, EventUpdateSchema
 
 client = TestClient(app)
 
