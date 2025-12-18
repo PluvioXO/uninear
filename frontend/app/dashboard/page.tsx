@@ -13,7 +13,9 @@ interface Event {
   attendees: number;
   capacity: number;
   status: 'Published' | 'Draft' | 'Scheduled' | 'Past';
-  price: number;
+  moods?: string[];
+  energy?: 'Low' | 'Medium' | 'High';
+  length?: string;
 }
 
 const INITIAL_EVENTS: Event[] = [
@@ -25,7 +27,9 @@ const INITIAL_EVENTS: Event[] = [
     attendees: 142,
     capacity: 200,
     status: 'Published',
-    price: 15
+    moods: ['Coding', 'Competition', 'Pizza'],
+    energy: 'High',
+    length: '24 hours'
   },
   {
     id: 2,
@@ -35,7 +39,9 @@ const INITIAL_EVENTS: Event[] = [
     attendees: 89,
     capacity: 150,
     status: 'Draft',
-    price: 0
+    moods: ['Networking', 'Career', 'Talk'],
+    energy: 'Medium',
+    length: '2 hours'
   },
   {
     id: 3,
@@ -45,7 +51,9 @@ const INITIAL_EVENTS: Event[] = [
     attendees: 45,
     capacity: 100,
     status: 'Scheduled',
-    price: 5
+    moods: ['Social', 'Drinks', 'Fun'],
+    energy: 'High',
+    length: '4 hours'
   },
   {
     id: 4,
@@ -55,7 +63,117 @@ const INITIAL_EVENTS: Event[] = [
     attendees: 350,
     capacity: 350,
     status: 'Past',
-    price: 45
+    moods: ['Formal', 'Dance', 'Dinner'],
+    energy: 'High',
+    length: '6 hours'
+  },
+  {
+    id: 5,
+    title: 'Coffee Morning',
+    date: '2024-11-10T10:00',
+    location: 'Campus Cafe',
+    attendees: 28,
+    capacity: 40,
+    status: 'Past',
+    moods: ['Chill', 'Coffee', 'Chat'],
+    energy: 'Low',
+    length: '2 hours'
+  },
+  {
+    id: 6,
+    title: 'Guest Speaker: AI Ethics',
+    date: '2024-10-05T14:00',
+    location: 'Lecture Hall A',
+    attendees: 180,
+    capacity: 200,
+    status: 'Past',
+    moods: ['Educational', 'Tech', 'Talk'],
+    energy: 'Medium',
+    length: '1.5 hours'
+  },
+  {
+    id: 7,
+    title: 'Welcome Week BBQ',
+    date: '2024-09-20T12:00',
+    location: 'Campus Green',
+    attendees: 280,
+    capacity: 300,
+    status: 'Past',
+    moods: ['Social', 'Food', 'Outdoor'],
+    energy: 'High',
+    length: '3 hours'
+  },
+  {
+    id: 8,
+    title: 'Late Night Study',
+    date: '2024-11-25T19:00',
+    location: 'Library Group Room',
+    attendees: 15,
+    capacity: 20,
+    status: 'Past',
+    moods: ['Study', 'Quiet', 'Focus'],
+    energy: 'Low',
+    length: '4 hours'
+  },
+  {
+    id: 9,
+    title: 'Gaming Tournament',
+    date: '2025-01-15T18:00',
+    location: 'Student Union',
+    attendees: 95,
+    capacity: 100,
+    status: 'Past',
+    moods: ['Gaming', 'Competition', 'Fun'],
+    energy: 'High',
+    length: '5 hours'
+  },
+  {
+    id: 10,
+    title: 'Career Fair Prep',
+    date: '2025-02-10T16:00',
+    location: 'Seminar Room 4',
+    attendees: 45,
+    capacity: 60,
+    status: 'Past',
+    moods: ['Career', 'Workshop', 'Professional'],
+    energy: 'Medium',
+    length: '1.5 hours'
+  },
+  {
+    id: 11,
+    title: 'Spring Picnic',
+    date: '2025-04-20T13:00',
+    location: 'City Park',
+    attendees: 120,
+    capacity: 150,
+    status: 'Past',
+    moods: ['Outdoor', 'Social', 'Relaxed'],
+    energy: 'Medium',
+    length: '4 hours'
+  },
+  {
+    id: 12,
+    title: 'End of Year Gala',
+    date: '2025-06-15T19:00',
+    location: 'Grand Ballroom',
+    attendees: 450,
+    capacity: 500,
+    status: 'Past',
+    moods: ['Formal', 'Party', 'Celebration'],
+    energy: 'High',
+    length: '6 hours'
+  },
+  {
+    id: 13,
+    title: 'Alumni Networking',
+    date: '2025-09-05T18:00',
+    location: 'Innovation Hub',
+    attendees: 75,
+    capacity: 100,
+    status: 'Past',
+    moods: ['Networking', 'Career', 'Alumni'],
+    energy: 'Medium',
+    length: '3 hours'
   }
 ];
 
@@ -67,7 +185,7 @@ export default function DashboardPage() {
   // Derived state for statistics
   const totalMembers = 1248; // Static for now
   const activeEventsCount = events.filter(e => e.status !== 'Past').length;
-  const totalRevenue = events.reduce((acc, curr) => acc + (curr.attendees * curr.price), 0);
+  const totalAttendees = events.reduce((acc, curr) => acc + curr.attendees, 0);
   const avgAttendance = Math.round(
     events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100
   );
@@ -75,6 +193,8 @@ export default function DashboardPage() {
   const filteredEvents = events.filter(e => 
     showPastEvents ? e.status === 'Past' : e.status !== 'Past'
   );
+
+  const pastEvents = events.filter(e => e.status === 'Past').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   return (
     <div className="min-h-screen bg-black text-white overflow-x-hidden">
@@ -87,7 +207,6 @@ export default function DashboardPage() {
               <Link href="/dashboard" className="text-white">Overview</Link>
               <Link href="#" className="text-gray-400 hover:text-white transition-colors">Events</Link>
               <Link href="#" className="text-gray-400 hover:text-white transition-colors">Members</Link>
-              <Link href="#" className="text-gray-400 hover:text-white transition-colors">Finances</Link>
               <Link href="#" className="text-gray-400 hover:text-white transition-colors">Settings</Link>
             </div>
           </div>
@@ -124,7 +243,9 @@ export default function DashboardPage() {
                   attendees: 0,
                   capacity: Number(formData.get('capacity')),
                   status: 'Draft',
-                  price: Number(formData.get('price'))
+                  moods: (formData.get('moods') as string).split(',').map(s => s.trim()),
+                  energy: formData.get('energy') as 'Low' | 'Medium' | 'High',
+                  length: formData.get('length') as string
                 };
                 setEvents([...events, newEvent]);
                 setIsCreateModalOpen(false);
@@ -149,8 +270,22 @@ export default function DashboardPage() {
                     <input name="capacity" type="number" required className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-500" placeholder="100" />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-400 mb-1">Ticket Price ($)</label>
-                    <input name="price" type="number" required className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-500" placeholder="0" />
+                    <label className="block text-sm text-gray-400 mb-1">Length</label>
+                    <input name="length" required className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-500" placeholder="e.g. 2 hours" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Energy Level</label>
+                    <select name="energy" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-500 text-white">
+                      <option value="Low" className="bg-black">Low</option>
+                      <option value="Medium" className="bg-black">Medium</option>
+                      <option value="High" className="bg-black">High</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Mood Tags</label>
+                    <input name="moods" required className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-500" placeholder="e.g. Social, Fun" />
                   </div>
                 </div>
                 <div className="pt-4">
@@ -187,7 +322,7 @@ export default function DashboardPage() {
           {[
             { label: 'Total Members', value: totalMembers.toLocaleString(), change: '+12% this month', accent: 'bg-purple-500' },
             { label: 'Active Events', value: activeEventsCount.toString(), change: 'Currently live', accent: 'bg-blue-500' },
-            { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, change: 'All time', accent: 'bg-emerald-500' },
+            { label: 'Total Attendees', value: totalAttendees.toLocaleString(), change: 'All time', accent: 'bg-emerald-500' },
             { label: 'Avg. Capacity', value: `${avgAttendance}%`, change: 'Across all events', accent: 'bg-pink-500' }
           ].map((stat, i) => (
             <div key={i} className="border border-white/10 rounded-3xl p-6 bg-white/5 backdrop-blur-sm hover:bg-white/10 transition-colors">
@@ -199,6 +334,64 @@ export default function DashboardPage() {
               <p className="text-3xl font-bold">{stat.value}</p>
             </div>
           ))}
+        </div>
+
+        {/* Performance Overview */}
+        <div className="mb-10">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+            Performance Overview
+          </h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 border border-white/10 rounded-3xl p-6 bg-white/5 backdrop-blur-sm">
+              <h3 className="text-sm font-medium text-gray-400 mb-6">Attendance Trend (Past Events)</h3>
+              <div className="flex justify-between h-48 gap-4">
+                {pastEvents.length === 0 ? (
+                  <p className="text-gray-500 w-full text-center self-center">No past events data available.</p>
+                ) : pastEvents.map((event) => (
+                  <div key={event.id} className="flex flex-col items-center gap-2 flex-1 group h-full">
+                    <div className="w-full bg-white/10 rounded-t-lg relative flex-1 flex items-end overflow-hidden">
+                      <div 
+                        className="w-full bg-gradient-to-t from-purple-500 to-blue-500 transition-all duration-500 group-hover:opacity-80"
+                        style={{ height: `${(event.attendees / event.capacity) * 100}%` }}
+                      >
+                        <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-black text-xs font-bold px-2 py-1 rounded pointer-events-none whitespace-nowrap z-10">
+                          {event.attendees} / {event.capacity}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400 truncate w-full text-center">{new Date(event.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="border border-white/10 rounded-3xl p-6 bg-white/5 backdrop-blur-sm flex flex-col justify-center">
+              <h3 className="text-sm font-medium text-gray-400 mb-4">Key Insights</h3>
+              <ul className="space-y-4">
+                <li className="flex gap-3 items-start">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs">↑</div>
+                  <div>
+                    <p className="text-sm font-bold">Attendance Growth</p>
+                    <p className="text-xs text-gray-400">Your events are seeing a 15% increase in attendance month-over-month.</p>
+                  </div>
+                </li>
+                <li className="flex gap-3 items-start">
+                  <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs">★</div>
+                  <div>
+                    <p className="text-sm font-bold">Top Category</p>
+                    <p className="text-xs text-gray-400">"Social" events have the highest engagement rate (85%).</p>
+                  </div>
+                </li>
+                <li className="flex gap-3 items-start">
+                  <div className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs">⚡</div>
+                  <div>
+                    <p className="text-sm font-bold">Peak Energy</p>
+                    <p className="text-xs text-gray-400">High energy events retain attendees 20% longer.</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
 
         {/* Main Content Grid */}
@@ -243,9 +436,6 @@ export default function DashboardPage() {
                         <span className="text-gray-500">
                           {event.attendees} / {event.capacity} registered
                         </span>
-                        {event.price > 0 && (
-                          <span className="text-emerald-400">${event.price}</span>
-                        )}
                       </div>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-purple-500/20 group-hover:border-purple-500/30 transition-all">
@@ -296,7 +486,7 @@ export default function DashboardPage() {
               </h2>
               <div className="border border-white/10 rounded-2xl bg-white/5 p-1">
                 {[
-                  { user: 'Sarah M.', action: 'purchased a ticket', target: 'Tech Hackathon', time: '2m ago' },
+                  { user: 'Sarah M.', action: 'registered for', target: 'Tech Hackathon', time: '2m ago' },
                   { user: 'James L.', action: 'joined the society', target: '', time: '15m ago' },
                   { user: 'Admin', action: 'updated event details', target: 'Panel Night', time: '1h ago' },
                   { user: 'Alex K.', action: 'commented on', target: 'Freshers Mixer', time: '3h ago' }

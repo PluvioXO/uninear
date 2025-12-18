@@ -13,13 +13,20 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCalendarsUsageDescription": "This app needs access to your calendar to add events."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": [
+        "READ_CALENDAR",
+        "WRITE_CALENDAR"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {

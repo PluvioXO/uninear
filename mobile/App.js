@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, FlatList, ActivityIndicator, SafeAreaView, Platform, Image, TouchableOpacity, Alert, TextInput, Dimensions, Modal, ScrollView } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Calendar from 'expo-calendar';
 
 // API URL - Use 10.0.2.2 for Android Emulator, localhost for iOS Simulator
 // For physical devices, you must use your computer's LAN IP address (e.g., http://192.168.1.x:8000/events)
@@ -261,6 +262,37 @@ export default function App() {
     </ScrollView>
   );
 
+  const addToCalendar = async (event) => {
+    try {
+      const { status } = await Calendar.requestCalendarPermissionsAsync();
+      if (status === 'granted') {
+        const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+        const defaultCalendar = calendars.find(c => c.isPrimary) || calendars[0];
+        
+        if (defaultCalendar) {
+          const startDate = new Date(event.start_time || event.date);
+          const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // Default 2 hours
+
+          await Calendar.createEventAsync(defaultCalendar.id, {
+            title: event.title,
+            startDate,
+            endDate,
+            location: event.location,
+            notes: event.description || `Hosted by ${event.organizer}`,
+          });
+          Alert.alert('Success', 'Event added to your calendar!');
+        } else {
+          Alert.alert('Error', 'No calendar found on device.');
+        }
+      } else {
+        Alert.alert('Permission Denied', 'Calendar permission is required to add events.');
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to add event to calendar.');
+    }
+  };
+
   const renderEventItem = ({ item }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -296,6 +328,12 @@ export default function App() {
       )}
 
       <View style={styles.footer}>
+        <TouchableOpacity 
+          style={styles.calendarButton}
+          onPress={() => addToCalendar(item)}
+        >
+          <Text style={styles.calendarButtonText}>Add to Calendar</Text>
+        </TouchableOpacity>
         <TouchableOpacity 
           style={styles.rsvpButton}
           onPress={() => handleRSVP(item.title)}
@@ -646,11 +684,23 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
     paddingTop: 12,
+  },
+  calendarButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#a855f7',
+  },
+  calendarButtonText: {
+    color: '#a855f7',
+    fontWeight: '600',
+    fontSize: 12,
   },
   price: {
     fontSize: 16,

@@ -153,12 +153,12 @@ export default function Home() {
                 textClassName="text-gray-300 text-lg leading-relaxed"
                 baseRotation={12}
               >
-                Dashboards roll up attendance, engagement, and spend so exec teams know what to scale next.
+                Dashboards roll up attendance and engagement so exec teams know what to scale next.
               </ScrollReveal>
               <div className="grid grid-cols-2 gap-6">
                 {[
                   { label: 'Live check-ins', value: '482', detail: 'across 4 venues', accent: 'bg-purple-500' },
-                  { label: 'Budget in view', value: '$18.4k', detail: 'logged this week', accent: 'bg-blue-500' },
+                  { label: 'Active Members', value: '1,240', detail: 'logged this week', accent: 'bg-blue-500' },
                   { label: 'Feedback forms', value: '73%', detail: 'response rate', accent: 'bg-emerald-500' },
                   { label: 'Sponsor reach', value: '1.2M', detail: 'impressions', accent: 'bg-pink-500' }
                 ].map(card => (
