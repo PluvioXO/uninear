@@ -8,8 +8,8 @@ class EventCreateSchema(BaseModel):
     date: datetime  # Frontend sends 'date'
     location: str
     capacity: int
-    price: float
     status: str = "Draft"
+    organizer: str
     
     # Legacy/Optional fields
     end_time: Optional[datetime] = None
@@ -23,8 +23,8 @@ class EventUpdateSchema(BaseModel):
     date: Optional[datetime] = None
     location: Optional[str] = None
     capacity: Optional[int] = None
-    price: Optional[float] = None
     status: Optional[str] = None
+    organizer: Optional[str] = None
 
 class UserSignupSchema(BaseModel):
     email: str
