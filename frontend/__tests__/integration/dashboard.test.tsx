@@ -27,4 +27,14 @@ describe('Dashboard Integration', () => {
     expect(screen.getByText('Annual Tech Hackathon')).toBeInTheDocument()
     expect(screen.getByText('Industry Panel Night')).toBeInTheDocument()
   })
+
+  it('renders navigation links', () => {
+    render(<DashboardPage />)
+    
+    expect(screen.getByText('Overview')).toBeInTheDocument()
+    // Need to use getAllByText or check hrefs because strict text match might clash if reused
+    // But logically "Analytics" and "Settings" are in the nav
+    expect(screen.getByRole('link', { name: 'Analytics' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument()
+  })
 })
