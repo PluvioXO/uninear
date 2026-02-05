@@ -134,7 +134,6 @@ export default function AnalyticsDashboard() {
           <div className="border border-gray-200 rounded-3xl p-8 bg-white shadow-sm">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-bold text-gray-900">Attendance Growth & Forecast</h3>
-              <span className="text-xs font-medium px-2 py-1 bg-orange-100 text-orange-700 rounded-full">AR(1) Model</span>
             </div>
             
             <div className="h-80 w-full">
