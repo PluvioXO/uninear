@@ -15,7 +15,7 @@ export default function SignupPage() {
 
       {/* Navigation / Home Link */}
       <nav className="absolute top-0 w-full z-50 p-6">
-        <Link href="/" className="text-2xl font-bold tracking-tighter hover:text-orange-600 transition-colors text-blue-600">
+        <Link href="/" className="text-2xl font-bold tracking-tighter hover:text-orange-600 transition-colors text-orange-600">
           UNINEAR
         </Link>
       </nav>

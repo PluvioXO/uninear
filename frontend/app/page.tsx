@@ -17,7 +17,7 @@ export default function Home() {
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-md border-b border-gray-200">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="text-2xl font-bold tracking-tighter text-blue-600">UNINEAR</div>
+          <div className="text-2xl font-bold tracking-tighter text-orange-600">UNINEAR</div>
           <div className="hidden md:flex space-x-8">
             <Link href="#" className="hover:text-orange-600 transition-colors">Events</Link>
             <Link href="#" className="hover:text-orange-600 transition-colors">Societies</Link>
