@@ -21,7 +21,7 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
   description,
   badge,
   footer,
-  accent = '#a855f7',
+  accent = '#ea580c',
   className = ''
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -45,25 +45,25 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
       ref={cardRef}
       onPointerMove={handlePointerMove}
       onPointerLeave={() => setCoords({ x: 50, y: 50 })}
-      className={`group relative border border-white/10 rounded-[2.5rem] p-6 md:p-8 bg-white/5 backdrop-blur-lg overflow-hidden transition-all duration-500 hover:border-white/40 ${className}`}
+      className={`group relative border border-gray-200 rounded-[2.5rem] p-6 md:p-8 bg-white shadow-sm overflow-hidden transition-all duration-500 hover:border-orange-200 ${className}`}
       style={styleVars}
     >
       <div
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100 mix-blend-multiply"
         style={{
-          background: `radial-gradient(circle at var(--spotlight-x) var(--spotlight-y), ${accent}, transparent 55%)`
+          background: `radial-gradient(circle at var(--spotlight-x) var(--spotlight-y), ${accent}20, transparent 55%)`
         }}
       />
       <div className="relative z-10 space-y-4">
         {badge && (
-          <span className="inline-flex items-center gap-2 px-3 py-1 text-xs uppercase tracking-[0.3em] text-white/70 border border-white/20 rounded-full">
+          <span className="inline-flex items-center gap-2 px-3 py-1 text-xs uppercase tracking-[0.3em] text-gray-500 border border-gray-200 rounded-full bg-gray-50">
             {badge}
           </span>
         )}
-        <h3 className="text-2xl md:text-3xl font-semibold text-white">{title}</h3>
-        <p className="text-gray-300 text-base md:text-lg">{description}</p>
+        <h3 className="text-2xl md:text-3xl font-semibold text-gray-900">{title}</h3>
+        <p className="text-gray-500 text-base md:text-lg">{description}</p>
         {footer && (
-          <div className="pt-4 text-sm text-white/70 border-t border-white/10">{footer}</div>
+          <div className="pt-4 text-sm text-gray-400 border-t border-gray-100">{footer}</div>
         )}
       </div>
     </div>

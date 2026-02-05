@@ -20,7 +20,7 @@ const MagneticButton: React.FC<MagneticButtonProps> = ({
   subtitle,
   strength = 0.4,
   className = '',
-  accentClassName = 'from-purple-400/80 via-purple-500/70 to-blue-500/80',
+  accentClassName = 'from-orange-400/80 via-amber-500/70 to-yellow-500/80',
   ...buttonProps
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);

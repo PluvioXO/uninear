@@ -18,9 +18,9 @@ const DataTicker: React.FC<DataTickerProps> = ({
   const normalizedItems = useMemo(() => {
     return items.map(item => {
       if (typeof item === 'string') {
-        return { label: item, value: '', accent: 'bg-white/60' };
+        return { label: item, value: '', accent: 'bg-gray-400' };
       }
-      const { label, value = '', accent = 'bg-white/60' } = item;
+      const { label, value = '', accent = 'bg-gray-400' } = item;
       return { label, value, accent };
     });
   }, [items]);
@@ -28,7 +28,7 @@ const DataTicker: React.FC<DataTickerProps> = ({
   const loopedItems = useMemo(() => [...normalizedItems, ...normalizedItems], [normalizedItems]);
 
   return (
-    <div className={`w-full overflow-hidden border border-white/10 rounded-full bg-white/5 backdrop-blur px-6 py-3 ${className}`}>
+    <div className={`w-full overflow-hidden border border-gray-200 rounded-full bg-white shadow-sm px-6 py-3 ${className}`}>
       <div
         className="ticker-track flex items-center gap-8"
         style={{
@@ -38,9 +38,9 @@ const DataTicker: React.FC<DataTickerProps> = ({
       >
         {loopedItems.map((item, index) => (
           <div key={`${item.label}-${index}`} className="flex items-center gap-3 whitespace-nowrap">
-            <span className={`w-2 h-2 rounded-full ${item.accent ?? 'bg-purple-400'}`} />
-            <span className="text-xs uppercase tracking-[0.4em] text-gray-400">{item.label}</span>
-            {item.value && <span className="text-white text-lg font-semibold">{item.value}</span>}
+            <span className={`w-2 h-2 rounded-full ${item.accent ?? 'bg-orange-600'}`} />
+            <span className="text-xs uppercase tracking-[0.4em] text-gray-500">{item.label}</span>
+            {item.value && <span className="text-gray-900 text-lg font-semibold">{item.value}</span>}
           </div>
         ))}
       </div>
