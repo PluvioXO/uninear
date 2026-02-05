@@ -1,4 +1,3 @@
-
 import { jest } from '@jest/globals';
 
 // Mock expo-calendar
@@ -27,4 +26,14 @@ jest.mock('react-native-maps', () => {
     Marker: MockMapView.Marker,
     PROVIDER_GOOGLE: 'google',
   };
+});
+
+// Mock expo-modules-core
+jest.mock('expo-modules-core', () => {
+    const actual = jest.requireActual('expo-modules-core');
+    return {
+      ...actual,
+      NativeModulesProxy: {},
+      EventEmitter: jest.fn(),
+    };
 });
