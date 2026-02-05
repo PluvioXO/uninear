@@ -8,7 +8,6 @@ import RotatingText from '@/components/RotatingText';
 import ScrollReveal from '@/components/ScrollReveal';
 import MagneticButton from '@/components/MagneticButton';
 import SpotlightCard from '@/components/SpotlightCard';
-import ReactBitsBeams from '@/components/ReactBitsBeams';
 
 export default function Home() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
