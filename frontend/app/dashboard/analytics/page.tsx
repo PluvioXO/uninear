@@ -89,7 +89,7 @@ export default function AnalyticsDashboard() {
               <Link href="#" className="text-gray-500 hover:text-gray-900 transition-colors">Events</Link>
               <Link href="#" className="text-gray-500 hover:text-gray-900 transition-colors">Members</Link>
               <Link href="/dashboard/analytics" className="text-gray-900 font-semibold">Analytics</Link>
-              <Link href="#" className="text-gray-500 hover:text-gray-900 transition-colors">Settings</Link>
+              <Link href="/dashboard/settings" className="text-gray-500 hover:text-gray-900 transition-colors">Settings</Link>
             </div>
           </div>
           <div className="flex items-center gap-4">
