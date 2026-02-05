@@ -379,7 +379,7 @@ export default function DashboardPage() {
                   <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs">★</div>
                   <div>
                     <p className="text-sm font-bold">Top Category</p>
-                    <p className="text-xs text-gray-400">"Social" events have the highest engagement rate (85%).</p>
+                    <p className="text-xs text-gray-400">&quot;Social&quot; events have the highest engagement rate (85%).</p>
                   </div>
                 </li>
                 <li className="flex gap-3 items-start">

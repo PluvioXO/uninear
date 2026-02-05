@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function OrganizerDashboard() {
-  const [events, setEvents] = useState([
+  const [events] = useState([
     { id: 1, title: 'Annual Tech Hackathon', date: '2025-10-15', location: 'Engineering Hub', capacity: 200, status: 'Published' },
     { id: 2, title: 'Industry Panel Night', date: '2025-10-22', location: 'Main Auditorium', capacity: 150, status: 'Draft' },
   ]);

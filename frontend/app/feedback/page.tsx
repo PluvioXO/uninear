@@ -34,7 +34,7 @@ export default function FeedbackPage() {
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
       <div className="bg-white/5 border border-white/10 rounded-xl p-8 max-w-md w-full">
         <h1 className="text-2xl font-bold mb-2 text-center">Event Feedback</h1>
-        <p className="text-gray-400 text-center mb-8">How was "Annual Tech Hackathon"?</p>
+        <p className="text-gray-400 text-center mb-8">How was &quot;Annual Tech Hackathon&quot;?</p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="text-center">
