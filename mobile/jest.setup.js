@@ -37,3 +37,11 @@ jest.mock('expo-modules-core', () => {
       EventEmitter: jest.fn(),
     };
 });
+
+// Mock expo
+// Mock expo
+jest.mock('expo', () => {
+    return {
+      registerRootComponent: jest.fn(),
+    };
+}, { virtual: true });
