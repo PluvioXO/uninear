@@ -3,7 +3,6 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -11,7 +10,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Area,
-  ReferenceDot,
   ComposedChart
 } from 'recharts';
 
@@ -77,6 +75,17 @@ export default function AnalyticsDashboard() {
     return data;
   }, [historicalData, forecastData]);
 
+  type ForecastDotProps = {
+    payload?: { name?: string };
+    cx?: number;
+    cy?: number;
+  };
+
+  const renderForecastDot = ({ payload, cx, cy }: ForecastDotProps) => {
+    if (payload?.name !== 'Nxt' || cx == null || cy == null) return null;
+    return <circle cx={cx} cy={cy} r={4} fill="white" stroke="#f97316" strokeWidth={2} />;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden">
       {/* Dashboard Navigation */}
@@ -105,7 +114,7 @@ export default function AnalyticsDashboard() {
       <main className="relative z-10 container mx-auto px-6 pt-28 pb-12">
         <div className="mb-10">
           <h1 className="text-3xl md:text-4xl font-bold mb-2">Analytics</h1>
-          <p className="text-gray-400">Deep dive into your society's performance and engagement metrics.</p>
+          <p className="text-gray-400">Deep dive into your society&apos;s performance and engagement metrics.</p>
         </div>
 
         {/* Key Metrics Grid */}
@@ -184,13 +193,7 @@ export default function AnalyticsDashboard() {
                     stroke="#f97316" 
                     strokeWidth={3} 
                     strokeDasharray="5 5"
-                    dot={(props: any) => {
-                       // Only show dot for "Nxt" point
-                       if (props.payload.name === 'Nxt') {
-                         return <circle cx={props.cx} cy={props.cy} r={4} fill="white" stroke="#f97316" strokeWidth={2} />;
-                       }
-                       return <></>;
-                    }}
+                    dot={renderForecastDot}
                   />
                 </ComposedChart>
               </ResponsiveContainer>
