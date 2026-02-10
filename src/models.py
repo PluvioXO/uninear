@@ -34,3 +34,7 @@ class UserSignupSchema(BaseModel):
 class UserLoginSchema(BaseModel):
     email: str
     password: str
+
+class EventAttendanceSchema(BaseModel):
+    event_id: int
+    user_id: Optional[str] = None
