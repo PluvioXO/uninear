@@ -38,3 +38,9 @@ class UserLoginSchema(BaseModel):
 class EventAttendanceSchema(BaseModel):
     event_id: int
     user_id: Optional[str] = None
+
+class EventAttendanceResponseSchema(BaseModel):
+    id: int
+    event_id: int
+    user_id: str
+    created_at: datetime
