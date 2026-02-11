@@ -65,6 +65,22 @@ export default function SignupPage() {
             </div>
 
             <div className="space-y-2">
+              <label htmlFor="verificationEmail" className="block text-sm font-medium text-gray-700">
+                Verification Email (@bath.ac.uk)
+              </label>
+              <input
+                id="verificationEmail"
+                type="email"
+                placeholder="name@bath.ac.uk"
+                pattern="^[^@\s]+@bath\.ac\.uk$"
+                title="Please use your @bath.ac.uk email address."
+                required
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+              />
+              <p className="text-xs text-gray-500">We&apos;ll send a verification link to this university email.</p>
+            </div>
+
+            <div className="space-y-2">
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
               </label>
