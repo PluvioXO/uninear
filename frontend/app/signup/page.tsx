@@ -1,11 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
 import ReactBitsBeams from '@/components/ReactBitsBeams';
 
 export default function SignupPage() {
+  const [email, setEmail] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
+
+  const isValidEmail = (value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+  const isBathEmail = (value: string) => /^[^@\s]+@bath\.ac\.uk$/.test(value);
+  const canSubmit = isValidEmail(email) && isBathEmail(verificationEmail);
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center relative overflow-hidden px-4">
       {/* Background Effect */}
@@ -63,6 +70,8 @@ export default function SignupPage() {
                 required
                 pattern="^[^@\s]+@[^@\s]+\.[^@\s]+$"
                 title="Please enter a valid email address."
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
               />
             </div>
@@ -78,6 +87,8 @@ export default function SignupPage() {
                 pattern="^[^@\s]+@bath\.ac\.uk$"
                 title="Please use your @bath.ac.uk email address."
                 required
+                value={verificationEmail}
+                onChange={(event) => setVerificationEmail(event.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
               />
               <p className="text-xs text-gray-500">We&apos;ll send a verification link to this university email.</p>
@@ -98,9 +109,12 @@ export default function SignupPage() {
             <div className="pt-2">
               <MagneticButton
                 label="Create Account"
-                className="w-full bg-gray-900 text-white justify-center font-semibold"
+                className={`w-full bg-gray-900 text-white justify-center font-semibold ${
+                  canSubmit ? '' : 'opacity-50 cursor-not-allowed'
+                }`}
                 accentClassName="from-orange-400 via-amber-400 to-yellow-400"
                 type="submit"
+                disabled={!canSubmit}
               />
             </div>
           </form>

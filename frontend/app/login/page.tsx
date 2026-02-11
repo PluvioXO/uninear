@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import MagneticButton from '@/components/MagneticButton';
@@ -8,6 +8,9 @@ import ReactBitsBeams from '@/components/ReactBitsBeams';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [email, setEmail] = useState('');
+
+  const isValidEmail = (value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +51,8 @@ export default function LoginPage() {
                 required
                 pattern="^[^@\s]+@[^@\s]+\.[^@\s]+$"
                 title="Please enter a valid email address."
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
               />
             </div>
@@ -77,9 +82,12 @@ export default function LoginPage() {
             <div className="pt-2">
               <MagneticButton
                 label="Sign In"
-                className="w-full bg-gray-900 text-white justify-center font-semibold"
+                className={`w-full bg-gray-900 text-white justify-center font-semibold ${
+                  isValidEmail(email) ? '' : 'opacity-50 cursor-not-allowed'
+                }`}
                 accentClassName="from-orange-400 via-amber-400 to-yellow-400"
                 type="submit"
+                disabled={!isValidEmail(email)}
               />
             </div>
           </form>

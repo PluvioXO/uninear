@@ -160,6 +160,7 @@ export default function App() {
   );
 
   const isValidEmail = (email) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+  const isProfileSaveDisabled = !isValidEmail(editForm.email);
 
   const saveProfile = () => {
     if (!isValidEmail(editForm.email)) {
@@ -232,8 +233,9 @@ export default function App() {
               <Text style={styles.buttonText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={[styles.button, styles.saveButton]}
+              style={[styles.button, styles.saveButton, isProfileSaveDisabled && styles.saveButtonDisabled]}
               onPress={saveProfile}
+              disabled={isProfileSaveDisabled}
             >
               <Text style={[styles.buttonText, styles.saveButtonText]}>Save</Text>
             </TouchableOpacity>
@@ -1063,6 +1065,9 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     backgroundColor: '#a855f7',
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#94a3b8',
   },
   buttonText: {
     fontWeight: '600',
