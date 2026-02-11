@@ -12,6 +12,7 @@ export default function SignupPage() {
   const isValidEmail = (value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
   const isBathEmail = (value: string) => /^[^@\s]+@bath\.ac\.uk$/.test(value);
   const canSubmit = isValidEmail(email) && isBathEmail(verificationEmail);
+  const showVerificationError = verificationEmail.length > 0 && !isBathEmail(verificationEmail);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center relative overflow-hidden px-4">
@@ -91,7 +92,11 @@ export default function SignupPage() {
                 onChange={(event) => setVerificationEmail(event.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
               />
-              <p className="text-xs text-gray-500">We&apos;ll send a verification link to this university email.</p>
+              {showVerificationError ? (
+                <p className="text-xs text-red-600">Verification email must end with @bath.ac.uk.</p>
+              ) : (
+                <p className="text-xs text-gray-500">We&apos;ll send a verification link to this university email.</p>
+              )}
             </div>
 
             <div className="space-y-2">
