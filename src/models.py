@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
 from datetime import datetime
 
@@ -30,6 +30,13 @@ class UserSignupSchema(BaseModel):
     email: str
     password: str
     full_name: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_bath_email(cls, value: str) -> str:
+        if not value.lower().endswith("@bath.ac.uk"):
+            raise ValueError("Only @bath.ac.uk emails are allowed")
+        return value
 
 class UserLoginSchema(BaseModel):
     email: str

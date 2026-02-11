@@ -69,14 +69,24 @@ def test_event_update_schema_empty():
 def test_user_signup_schema_valid():
     """Test that UserSignupSchema accepts valid data."""
     data = {
-        "email": "test@example.com",
+        "email": "test@bath.ac.uk",
         "password": "secretpassword",
         "full_name": "Test User"
     }
     user = UserSignupSchema(**data)
-    assert user.email == "test@example.com"
+    assert user.email == "test@bath.ac.uk"
     assert user.password == "secretpassword"
     assert user.full_name == "Test User"
+
+def test_user_signup_schema_rejects_non_bath_email():
+    """Test that UserSignupSchema rejects non-bath emails."""
+    data = {
+        "email": "test@example.com",
+        "password": "secretpassword",
+        "full_name": "Test User"
+    }
+    with pytest.raises(ValidationError):
+        UserSignupSchema(**data)
 
 def test_user_login_schema_valid():
     """Test that UserLoginSchema accepts valid data."""

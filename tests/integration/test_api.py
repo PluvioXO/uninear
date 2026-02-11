@@ -93,10 +93,10 @@ def test_signup():
     mock_response = MagicMock()
     # Mocking what Supabase Auth response looks like roughly
     mock_response.user.id = "user-123"
-    mock_response.user.email = "test@example.com"
+    mock_response.user.email = "test@bath.ac.uk"
     
     payload = {
-        "email": "test@example.com",
+        "email": "test@bath.ac.uk",
         "password": "strongpassword",
         "full_name": "Test User"
     }
