@@ -78,6 +78,16 @@ def test_user_signup_schema_valid():
     assert user.password == "secretpassword"
     assert user.full_name == "Test User"
 
+def test_user_signup_schema_accepts_bath_email():
+    """Test that UserSignupSchema accepts @bath.ac.uk emails."""
+    data = {
+        "email": "member@bath.ac.uk",
+        "password": "secretpassword",
+        "full_name": "Bath Member"
+    }
+    user = UserSignupSchema(**data)
+    assert user.email == "member@bath.ac.uk"
+
 def test_user_signup_schema_rejects_non_bath_email():
     """Test that UserSignupSchema rejects non-bath emails."""
     data = {
