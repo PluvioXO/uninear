@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Query
 from typing import Any, Dict, cast
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -45,14 +45,16 @@ class UniNearBackend:
         self.app.patch("/events/{event_id}")(self.update_event)
         self.app.post("/events/{event_id}/rsvp")(self.create_rsvp)
         self.app.delete("/events/{event_id}/rsvp")(self.cancel_rsvp)
+        # RSVP Routes
+        self.app.get("/api/rsvp")(self.get_rsvps)
 
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
 
-    def get_events(self):
+    def get_events(self) -> list[Dict[str, Any]]:
         try:
             response = self.db.client.table("events").select("*").execute()
-            return response.data
+            return cast(list[Dict[str, Any]], response.data or [])
         except Exception as e:
             print(f"Database error: {e}. Returning mock data.")
             return [
@@ -204,6 +206,41 @@ class UniNearBackend:
             return Response(status_code=204)
         except HTTPException:
             raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def get_rsvps(self, user_id: str = Query(..., min_length=1)) -> list[Dict[str, Any]]:
+        try:
+            attendance_response = (
+                self.db.client
+                .table("event_attendance")
+                .select("id, event_id, user_id, created_at")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            attendance_rows = cast(list[Dict[str, Any]], attendance_response.data or [])
+
+            if not attendance_rows:
+                return []
+
+            event_ids = [row.get("event_id") for row in attendance_rows if row.get("event_id") is not None]
+            events_response = (
+                self.db.client
+                .table("events")
+                .select("*")
+                .in_("id", event_ids)
+                .execute()
+            )
+            events_rows = cast(list[Dict[str, Any]], events_response.data or [])
+            events_by_id = {event.get("id"): event for event in events_rows}
+
+            return [
+                {
+                    **row,
+                    "event": events_by_id.get(row.get("event_id"))
+                }
+                for row in attendance_rows
+            ]
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
