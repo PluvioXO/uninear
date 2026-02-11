@@ -10,6 +10,7 @@ const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8000/events' : 'htt
 
 const MOCK_USER = {
   name: 'Maximilian Nicholson',
+  email: 'maximilian.nicholson@bath.ac.uk',
   role: 'Student Member',
   avatar: 'https://ui-avatars.com/api/?name=Maximilian+Nicholson&background=a855f7&color=fff&size=128',
   bio: 'Computer Science student at University of Bath. Love hackathons and coffee.',
@@ -158,7 +159,14 @@ export default function App() {
     </View>
   );
 
+  const isValidEmail = (email) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+
   const saveProfile = () => {
+    if (!isValidEmail(editForm.email)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address before saving.');
+      return;
+    }
+
     setUserProfile(editForm);
     setIsEditingProfile(false);
     Alert.alert('Success', 'Profile updated successfully!');
@@ -180,6 +188,15 @@ export default function App() {
             style={styles.input}
             value={editForm.name}
             onChangeText={(text) => setEditForm({...editForm, name: text})}
+          />
+
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            value={editForm.email}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            onChangeText={(text) => setEditForm({...editForm, email: text})}
           />
           
           <Text style={styles.label}>Bio</Text>
@@ -226,6 +243,7 @@ export default function App() {
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>{userProfile.name}</Text>
           <Text style={styles.profileRole}>{userProfile.role}</Text>
+          <Text style={styles.profileEmail}>{userProfile.email}</Text>
           
           <View style={styles.infoSection}>
             <Text style={styles.sectionTitle}>About</Text>
@@ -952,6 +970,11 @@ const styles = StyleSheet.create({
     color: '#a855f7',
     fontWeight: '600',
     textAlign: 'center',
+  profileEmail: {
+    fontSize: 14,
+    color: '#888',
+    marginBottom: 20
+  },
     marginBottom: 20,
   },
   infoSection: {

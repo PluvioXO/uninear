@@ -60,6 +60,9 @@ export default function SignupPage() {
                 id="email"
                 type="email"
                 placeholder="president@society.com"
+                required
+                pattern="^[^@\s]+@[^@\s]+\.[^@\s]+$"
+                title="Please enter a valid email address."
                 className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
               />
             </div>
