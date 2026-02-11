@@ -1,5 +1,5 @@
 import os
-import pytest
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 # Set dummy env vars BEFORE importing src.main to avoid Database init error
@@ -39,7 +39,7 @@ def test_create_event():
     mock_response = MagicMock()
     mock_response.data = [{"id": 1, "title": "New Event", "status": "Draft"}]
 
-    payload = {
+    payload: dict[str, Any] = {
         "title": "New Event",
         "date": "2025-12-01T10:00:00",
         "location": "Conference Room",
@@ -78,7 +78,7 @@ def test_update_event():
     mock_response = MagicMock()
     mock_response.data = [{"id": 1, "title": "Updated Title"}]
 
-    payload = {"title": "Updated Title"}
+    payload: dict[str, Any] = {"title": "Updated Title"}
 
     with patch.object(backend.db.client, 'table') as mock_table:
         mock_table.return_value.update.return_value.eq.return_value.execute.return_value = mock_response
@@ -88,14 +88,88 @@ def test_update_event():
         assert response.status_code == 200
         assert response.json()[0]["title"] == "Updated Title"
 
-# 6. Test Signup
+# 6. Test RSVP increments attendee_count
+def test_rsvp_increments_attendee_count():
+    attendance_response = MagicMock()
+    attendance_response.data = [{"id": 1, "event_id": 1, "user_id": "user-1"}]
+
+    select_response = MagicMock()
+    select_response.data = {"attendee_count": 2}
+
+    update_response = MagicMock()
+    update_response.data = [{"id": 1, "attendee_count": 3}]
+
+    attendance_table = MagicMock()
+    attendance_table.insert.return_value.execute.return_value = attendance_response
+
+    events_table = MagicMock()
+    events_table.select.return_value.eq.return_value.single.return_value.execute.return_value = select_response
+    events_table.update.return_value.eq.return_value.execute.return_value = update_response
+
+    def table_side_effect(name: str):
+        return attendance_table if name == "event_attendance" else events_table
+
+    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+        payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+        response = client.post("/events/1/rsvp", json=payload)
+
+        assert response.status_code == 200
+        events_table.update.assert_called_with({"attendee_count": 3})
+
+# 7. Test RSVP cancel decrements attendee_count
+def test_rsvp_cancel_decrements_attendee_count():
+    delete_response = MagicMock()
+    delete_response.data = [{"id": 1}]
+
+    select_response = MagicMock()
+    select_response.data = {"attendee_count": 1}
+
+    update_response = MagicMock()
+    update_response.data = [{"id": 1, "attendee_count": 0}]
+
+    attendance_table = MagicMock()
+    attendance_table.delete.return_value.eq.return_value.execute.return_value = delete_response
+
+    events_table = MagicMock()
+    events_table.select.return_value.eq.return_value.single.return_value.execute.return_value = select_response
+    events_table.update.return_value.eq.return_value.execute.return_value = update_response
+
+    def table_side_effect(name: str):
+        return attendance_table if name == "event_attendance" else events_table
+
+    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+        payload: dict[str, Any] = {"event_id": 1, "user_id": None}
+        response = client.request("DELETE", "/events/1/rsvp", json=payload)
+
+        assert response.status_code == 204
+        events_table.update.assert_called_with({"attendee_count": 0})
+
+def test_rsvp_cancel_not_found():
+    delete_response = MagicMock()
+    delete_response.data = []
+
+    attendance_table = MagicMock()
+    attendance_table.delete.return_value.eq.return_value.execute.return_value = delete_response
+
+    events_table = MagicMock()
+
+    def table_side_effect(name: str):
+        return attendance_table if name == "event_attendance" else events_table
+
+    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+        payload: dict[str, Any] = {"event_id": 1, "user_id": None}
+        response = client.request("DELETE", "/events/1/rsvp", json=payload)
+
+        assert response.status_code == 404
+
+# 8. Test Signup
 def test_signup():
     mock_response = MagicMock()
     # Mocking what Supabase Auth response looks like roughly
     mock_response.user.id = "user-123"
     mock_response.user.email = "test@bath.ac.uk"
     
-    payload = {
+    payload: dict[str, Any] = {
         "email": "test@bath.ac.uk",
         "password": "strongpassword",
         "full_name": "Test User"
@@ -110,12 +184,12 @@ def test_signup():
         # The endpoint returns the whole response object, we might want to check its content
         # Note: Response serialization might vary, but usually status 200 is good enough for now with mock
 
-# 7. Test Login
+# 9. Test Login
 def test_login():
     mock_response = MagicMock()
     mock_response.session.access_token = "fake-token"
     
-    payload = {
+    payload: dict[str, Any] = {
         "email": "test@example.com",
         "password": "strongpassword"
     }

@@ -15,6 +15,7 @@ create table if not exists public.events (
   organiser_id text,
   mood_tags text[] not null default '{}',
   energy_level text,
+  attendee_count integer not null default 0,
   latitude double precision,
   longitude double precision,
   friends_attending text[] not null default '{}',

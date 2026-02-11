@@ -1,11 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
+from typing import Any, Dict, cast
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import the database connection
 from src.database import Database
 
 # --- MODELS ---
-from src.models import EventCreateSchema, EventUpdateSchema, UserSignupSchema, UserLoginSchema
+from src.models import EventCreateSchema, EventUpdateSchema, UserSignupSchema, UserLoginSchema, EventAttendanceSchema
 
 class UniNearBackend:
     def __init__(self):
@@ -42,6 +43,8 @@ class UniNearBackend:
         self.app.post("/events")(self.create_event)
         self.app.delete("/events/{event_id}")(self.delete_event)
         self.app.patch("/events/{event_id}")(self.update_event)
+        self.app.post("/events/{event_id}/rsvp")(self.create_rsvp)
+        self.app.delete("/events/{event_id}/rsvp")(self.cancel_rsvp)
 
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
@@ -128,7 +131,7 @@ class UniNearBackend:
 
     def delete_event(self, event_id: str):
         try:
-            response = self.db.client.table("events").delete().eq("id", event_id).execute()
+            self.db.client.table("events").delete().eq("id", event_id).execute()
             return {"message": "Event deleted successfully"}
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -141,6 +144,66 @@ class UniNearBackend:
 
             response = self.db.client.table("events").update(event_data).eq("id", event_id).execute()
             return response.data
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def create_rsvp(self, event_id: int, attendance: EventAttendanceSchema) -> Dict[str, Any]:
+        try:
+            if attendance.event_id != event_id:
+                raise HTTPException(status_code=400, detail="Event ID mismatch")
+
+            payload: Dict[str, Any] = {"event_id": event_id, "user_id": attendance.user_id}
+            response = self.db.client.table("event_attendance").insert(payload).execute()
+
+            event_response = (
+                self.db.client
+                .table("events")
+                .select("attendee_count")
+                .eq("id", event_id)
+                .single()
+                .execute()
+            )
+            event_data: Dict[str, Any] = event_response.data if isinstance(event_response.data, dict) else {}
+            current_count = int(event_data.get("attendee_count") or 0)
+            updated_count = current_count + 1
+
+            self.db.client.table("events").update({"attendee_count": updated_count}).eq("id", event_id).execute()
+
+            response_data = cast(list[Dict[str, Any]], response.data) if response.data else []
+            return response_data[0] if response_data else {"event_id": event_id, "user_id": attendance.user_id}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def cancel_rsvp(self, event_id: int, attendance: EventAttendanceSchema):
+        try:
+            if attendance.event_id != event_id:
+                raise HTTPException(status_code=400, detail="Event ID mismatch")
+
+            delete_query = self.db.client.table("event_attendance").delete().eq("event_id", event_id)
+            if attendance.user_id:
+                delete_query = delete_query.eq("user_id", attendance.user_id)
+            delete_response = delete_query.execute()
+
+            if not delete_response.data:
+                raise HTTPException(status_code=404, detail="RSVP not found")
+
+            event_response = (
+                self.db.client
+                .table("events")
+                .select("attendee_count")
+                .eq("id", event_id)
+                .single()
+                .execute()
+            )
+            event_data: Dict[str, Any] = event_response.data if isinstance(event_response.data, dict) else {}
+            current_count = int(event_data.get("attendee_count") or 0)
+            updated_count = max(current_count - 1, 0)
+
+            self.db.client.table("events").update({"attendee_count": updated_count}).eq("id", event_id).execute()
+
+            return Response(status_code=204)
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
