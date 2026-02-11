@@ -146,6 +146,9 @@ class UniNearBackend:
 
     def signup(self, user: UserSignupSchema):
         try:
+            if not user.email.lower().endswith("@bath.ac.uk"):
+                raise HTTPException(status_code=400, detail="Only @bath.ac.uk emails are allowed")
+
             response = self.db.client.auth.sign_up({
                 "email": user.email,
                 "password": user.password,
