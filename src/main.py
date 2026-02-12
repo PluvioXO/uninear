@@ -263,8 +263,10 @@ class UniNearBackend:
     def get_event_rsvps(self, event_id: int) -> list[Dict[str, Any]]:
         """GET /api/events/{event_id}/rsvps — Return RSVPs for an organiser's event."""
         try:
+            # Use admin client to bypass RLS (organiser-level query)
+            db = self.db.admin or self.db.client
             attendance_response = (
-                self.db.client
+                db
                 .table("event_attendance")
                 .select("user_id, created_at")
                 .eq("event_id", event_id)

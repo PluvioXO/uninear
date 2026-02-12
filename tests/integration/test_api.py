@@ -281,7 +281,7 @@ def test_FR14_get_event_rsvps():
     mock_user.user.email = "alice@bath.ac.uk"
     mock_user.user.user_metadata = {"full_name": "Alice Smith"}
 
-    with patch.object(backend.db.client, 'table', return_value=attendance_table):
+    with patch.object(backend.db.admin, 'table', return_value=attendance_table):
         with patch.object(backend.db.admin.auth.admin, 'get_user_by_id', return_value=mock_user) as mock_get:
             response = client.get("/api/events/1/rsvps")
 
