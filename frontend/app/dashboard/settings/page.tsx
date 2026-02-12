@@ -46,7 +46,6 @@ export default function SettingsPage() {
                 { id: 'general', label: 'General', icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4' },
                 { id: 'notifications', label: 'Notifications', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
                 { id: 'team', label: 'Team Members', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
-                { id: 'billing', label: 'Billing & Plan', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -220,44 +219,6 @@ export default function SettingsPage() {
                </div>
             )}
 
-            {activeTab === 'billing' && (
-                <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm space-y-8">
-                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-1">Plan & Billing</h2>
-                  <p className="text-sm text-gray-500">Manage your subscription and payment methods.</p>
-                </div>
-                
-                <div className="bg-gray-900 rounded-2xl p-6 text-white flex justify-between items-center bg-[url('/bg-pattern.svg')]">
-                  <div>
-                    <p className="text-gray-400 text-sm mb-1">Current Plan</p>
-                    <h3 className="text-2xl font-bold text-white mb-2">Pro Society</h3>
-                    <p className="text-sm text-gray-400">$29/month • Renews on March 1st</p>
-                  </div>
-                  <button className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                    Upgrade Plan
-                  </button>
-                </div>
-
-                <div>
-                   <h3 className="text-sm font-medium text-gray-900 mb-4">Payment Methods</h3>
-                   <div className="border border-gray-200 rounded-xl p-4 flex justify-between items-center">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-6 bg-gray-200 rounded flex items-center justify-center text-xs font-bold text-gray-500">VISA</div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">Visa ending in 4242</p>
-                          <p className="text-xs text-gray-500">Expiry 12/26</p>
-                        </div>
-                      </div>
-                      <button className="text-sm text-gray-500 hover:text-gray-900 font-medium">Edit</button>
-                   </div>
-                </div>
-
-                 <div className="pt-4 border-t border-gray-100">
-                   <button className="text-sm text-red-600 font-medium hover:text-red-700">Cancel Subscription</button>
-                </div>
-              </div>
-            )}
-            
           </div>
         </div>
       </main>
