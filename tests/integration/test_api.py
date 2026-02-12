@@ -90,16 +90,21 @@ def test_update_event():
 
 # 6. Test RSVP increments attendee_count
 def test_rsvp_increments_attendee_count():
+    # Duplicate check: no existing RSVP
+    existing_response = MagicMock()
+    existing_response.data = []
+
     attendance_response = MagicMock()
     attendance_response.data = [{"id": 1, "event_id": 1, "user_id": "user-1"}]
 
     select_response = MagicMock()
-    select_response.data = {"attendee_count": 2}
+    select_response.data = {"attendee_count": 2, "capacity": 50}
 
     update_response = MagicMock()
     update_response.data = [{"id": 1, "attendee_count": 3}]
 
     attendance_table = MagicMock()
+    attendance_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
     attendance_table.insert.return_value.execute.return_value = attendance_response
 
     events_table = MagicMock()
@@ -115,6 +120,50 @@ def test_rsvp_increments_attendee_count():
 
         assert response.status_code == 200
         events_table.update.assert_called_with({"attendee_count": 3})
+
+# 6b. Test duplicate RSVP returns 409 (SCRUM-348)
+def test_rsvp_duplicate_returns_409():
+    existing_response = MagicMock()
+    existing_response.data = [{"id": 99}]  # Already RSVP'd
+
+    attendance_table = MagicMock()
+    attendance_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
+
+    events_table = MagicMock()
+
+    def table_side_effect(name: str):
+        return attendance_table if name == "event_attendance" else events_table
+
+    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+        payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+        response = client.post("/events/1/rsvp", json=payload)
+
+        assert response.status_code == 409
+        assert "already RSVP" in response.json()["detail"]
+
+# 6c. Test RSVP at capacity returns 409 (SCRUM-349)
+def test_rsvp_at_capacity_returns_409():
+    existing_response = MagicMock()
+    existing_response.data = []  # No existing RSVP
+
+    select_response = MagicMock()
+    select_response.data = {"attendee_count": 50, "capacity": 50}  # At capacity
+
+    attendance_table = MagicMock()
+    attendance_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
+
+    events_table = MagicMock()
+    events_table.select.return_value.eq.return_value.single.return_value.execute.return_value = select_response
+
+    def table_side_effect(name: str):
+        return attendance_table if name == "event_attendance" else events_table
+
+    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+        payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+        response = client.post("/events/1/rsvp", json=payload)
+
+        assert response.status_code == 409
+        assert "full capacity" in response.json()["detail"]
 
 # 7. Test RSVP cancel decrements attendee_count
 def test_rsvp_cancel_decrements_attendee_count():

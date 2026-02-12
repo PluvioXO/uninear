@@ -154,25 +154,44 @@ class UniNearBackend:
             if attendance.event_id != event_id:
                 raise HTTPException(status_code=400, detail="Event ID mismatch")
 
-            payload: Dict[str, Any] = {"event_id": event_id, "user_id": attendance.user_id}
-            response = self.db.client.table("event_attendance").insert(payload).execute()
+            # SCRUM-348: Check for duplicate RSVP
+            existing = (
+                self.db.client
+                .table("event_attendance")
+                .select("id")
+                .eq("event_id", event_id)
+                .eq("user_id", attendance.user_id)
+                .execute()
+            )
+            if existing.data:
+                raise HTTPException(status_code=409, detail="User has already RSVP'd to this event")
 
+            # SCRUM-349: Check capacity
             event_response = (
                 self.db.client
                 .table("events")
-                .select("attendee_count")
+                .select("attendee_count, capacity")
                 .eq("id", event_id)
                 .single()
                 .execute()
             )
             event_data: Dict[str, Any] = event_response.data if isinstance(event_response.data, dict) else {}
             current_count = int(event_data.get("attendee_count") or 0)
-            updated_count = current_count + 1
+            capacity = int(event_data.get("capacity") or 0)
 
+            if current_count >= capacity:
+                raise HTTPException(status_code=409, detail="Event is at full capacity")
+
+            payload: Dict[str, Any] = {"event_id": event_id, "user_id": attendance.user_id}
+            response = self.db.client.table("event_attendance").insert(payload).execute()
+
+            updated_count = current_count + 1
             self.db.client.table("events").update({"attendee_count": updated_count}).eq("id", event_id).execute()
 
             response_data = cast(list[Dict[str, Any]], response.data) if response.data else []
             return response_data[0] if response_data else {"event_id": event_id, "user_id": attendance.user_id}
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
