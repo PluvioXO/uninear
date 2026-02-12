@@ -88,9 +88,8 @@ def test_update_event():
         assert response.status_code == 200
         assert response.json()[0]["title"] == "Updated Title"
 
-# 6. Test RSVP increments attendee_count
-def test_rsvp_increments_attendee_count():
-    # Duplicate check: no existing RSVP
+# 6. test_FR16_create_rsvp — RSVP creates record and returns 201
+def test_FR16_create_rsvp():
     existing_response = MagicMock()
     existing_response.data = []
 
@@ -100,8 +99,8 @@ def test_rsvp_increments_attendee_count():
     select_response = MagicMock()
     select_response.data = {"attendee_count": 2, "capacity": 50}
 
-    update_response = MagicMock()
-    update_response.data = [{"id": 1, "attendee_count": 3}]
+    rpc_response = MagicMock()
+    rpc_response.data = 3
 
     attendance_table = MagicMock()
     attendance_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
@@ -109,22 +108,21 @@ def test_rsvp_increments_attendee_count():
 
     events_table = MagicMock()
     events_table.select.return_value.eq.return_value.single.return_value.execute.return_value = select_response
-    events_table.update.return_value.eq.return_value.execute.return_value = update_response
 
     def table_side_effect(name: str):
         return attendance_table if name == "event_attendance" else events_table
 
     with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
-        response = client.post("/events/1/rsvp", json=payload)
+        with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
+            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+            response = client.post("/api/rsvp", json=payload)
 
-        assert response.status_code == 200
-        events_table.update.assert_called_with({"attendee_count": 3})
+            assert response.status_code == 201
 
-# 6b. Test duplicate RSVP returns 409 (SCRUM-348)
-def test_rsvp_duplicate_returns_409():
+# 6b. test_FR16_duplicate_rsvp_returns_409
+def test_FR16_duplicate_rsvp_returns_409():
     existing_response = MagicMock()
-    existing_response.data = [{"id": 99}]  # Already RSVP'd
+    existing_response.data = [{"id": 99}]
 
     attendance_table = MagicMock()
     attendance_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
@@ -136,18 +134,18 @@ def test_rsvp_duplicate_returns_409():
 
     with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
         payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
-        response = client.post("/events/1/rsvp", json=payload)
+        response = client.post("/api/rsvp", json=payload)
 
         assert response.status_code == 409
-        assert "already RSVP" in response.json()["detail"]
+        assert "Already RSVP" in response.json()["detail"]
 
-# 6c. Test RSVP at capacity returns 409 (SCRUM-349)
-def test_rsvp_at_capacity_returns_409():
+# 6c. test_FR16_rsvp_at_capacity_returns_400
+def test_FR16_rsvp_at_capacity_returns_400():
     existing_response = MagicMock()
-    existing_response.data = []  # No existing RSVP
+    existing_response.data = []
 
     select_response = MagicMock()
-    select_response.data = {"attendee_count": 50, "capacity": 50}  # At capacity
+    select_response.data = {"attendee_count": 50, "capacity": 50}
 
     attendance_table = MagicMock()
     attendance_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
@@ -160,59 +158,88 @@ def test_rsvp_at_capacity_returns_409():
 
     with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
         payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
-        response = client.post("/events/1/rsvp", json=payload)
+        response = client.post("/api/rsvp", json=payload)
 
-        assert response.status_code == 409
-        assert "full capacity" in response.json()["detail"]
+        assert response.status_code == 400
+        assert "Event is full" in response.json()["detail"]
 
-# 7. Test RSVP cancel decrements attendee_count
-def test_rsvp_cancel_decrements_attendee_count():
+# 6d. test_NFR03_rsvp_performance — RSVP completes within 1 second
+def test_NFR03_rsvp_performance():
+    import time
+
+    existing_response = MagicMock()
+    existing_response.data = []
+
+    attendance_response = MagicMock()
+    attendance_response.data = [{"id": 1, "event_id": 1, "user_id": "user-1"}]
+
+    select_response = MagicMock()
+    select_response.data = {"attendee_count": 0, "capacity": 50}
+
+    rpc_response = MagicMock()
+    rpc_response.data = 1
+
+    attendance_table = MagicMock()
+    attendance_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
+    attendance_table.insert.return_value.execute.return_value = attendance_response
+
+    events_table = MagicMock()
+    events_table.select.return_value.eq.return_value.single.return_value.execute.return_value = select_response
+
+    def table_side_effect(name: str):
+        return attendance_table if name == "event_attendance" else events_table
+
+    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+        with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
+            start = time.time()
+            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+            response = client.post("/api/rsvp", json=payload)
+            elapsed = time.time() - start
+
+            assert response.status_code == 201
+            assert elapsed < 1.0, f"RSVP took {elapsed:.3f}s, exceeds 1s NFR-03 limit"
+
+# 7. test_FR17_cancel_rsvp_decrements_count
+def test_FR17_cancel_rsvp_decrements_count():
     delete_response = MagicMock()
     delete_response.data = [{"id": 1}]
 
-    select_response = MagicMock()
-    select_response.data = {"attendee_count": 1}
-
-    update_response = MagicMock()
-    update_response.data = [{"id": 1, "attendee_count": 0}]
+    rpc_response = MagicMock()
+    rpc_response.data = 0
 
     attendance_table = MagicMock()
-    attendance_table.delete.return_value.eq.return_value.execute.return_value = delete_response
-
-    events_table = MagicMock()
-    events_table.select.return_value.eq.return_value.single.return_value.execute.return_value = select_response
-    events_table.update.return_value.eq.return_value.execute.return_value = update_response
+    attendance_table.delete.return_value.eq.return_value.eq.return_value.execute.return_value = delete_response
 
     def table_side_effect(name: str):
-        return attendance_table if name == "event_attendance" else events_table
+        return attendance_table if name == "event_attendance" else MagicMock()
 
     with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        payload: dict[str, Any] = {"event_id": 1, "user_id": None}
-        response = client.request("DELETE", "/events/1/rsvp", json=payload)
+        with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))) as mock_rpc:
+            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+            response = client.request("DELETE", "/events/1/rsvp", json=payload)
 
-        assert response.status_code == 204
-        events_table.update.assert_called_with({"attendee_count": 0})
+            assert response.status_code == 204
+            mock_rpc.assert_called_once_with("decrement_attendee_count", {"p_event_id": 1})
 
-def test_rsvp_cancel_not_found():
+# 7b. test_FR17_cancel_rsvp_not_found
+def test_FR17_cancel_rsvp_not_found():
     delete_response = MagicMock()
     delete_response.data = []
 
     attendance_table = MagicMock()
-    attendance_table.delete.return_value.eq.return_value.execute.return_value = delete_response
-
-    events_table = MagicMock()
+    attendance_table.delete.return_value.eq.return_value.eq.return_value.execute.return_value = delete_response
 
     def table_side_effect(name: str):
-        return attendance_table if name == "event_attendance" else events_table
+        return attendance_table if name == "event_attendance" else MagicMock()
 
     with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        payload: dict[str, Any] = {"event_id": 1, "user_id": None}
+        payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
         response = client.request("DELETE", "/events/1/rsvp", json=payload)
 
         assert response.status_code == 404
 
-# 8. Test Get RSVPs with nested event data
-def test_get_rsvps_with_event_data():
+# 8. test_FR21_get_user_rsvps_with_event_data
+def test_FR21_get_user_rsvps_with_event_data():
     attendance_response = MagicMock()
     attendance_response.data = [
         {"id": 1, "event_id": 10, "user_id": "user-1", "created_at": "2025-02-01T10:00:00"}
@@ -240,8 +267,8 @@ def test_get_rsvps_with_event_data():
         assert isinstance(body, list)
         assert body[0]["event"]["id"] == 10
 
-# 8b. Test Get Event RSVPs for organiser (returns user name, email, rsvp_time)
-def test_get_event_rsvps():
+# 8b. test_FR14_get_event_rsvps — organiser views attendee list
+def test_FR14_get_event_rsvps():
     attendance_response = MagicMock()
     attendance_response.data = [
         {"user_id": "uid-abc", "created_at": "2025-02-01T10:00:00"}

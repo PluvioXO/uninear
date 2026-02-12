@@ -103,3 +103,41 @@ create policy "Users can cancel own RSVP"
   on public.event_attendance for delete
   to authenticated
   using (user_id = auth.uid());
+
+-- =============================================================================
+-- RPC FUNCTIONS (atomic counters)
+-- =============================================================================
+
+-- Atomically increment attendee_count (prevents race conditions)
+create or replace function public.increment_attendee_count(p_event_id bigint)
+returns integer
+language plpgsql
+security definer
+as $$
+declare
+  new_count integer;
+begin
+  update public.events
+  set attendee_count = attendee_count + 1
+  where id = p_event_id
+  returning attendee_count into new_count;
+  return new_count;
+end;
+$$;
+
+-- Atomically decrement attendee_count (floor at 0)
+create or replace function public.decrement_attendee_count(p_event_id bigint)
+returns integer
+language plpgsql
+security definer
+as $$
+declare
+  new_count integer;
+begin
+  update public.events
+  set attendee_count = greatest(attendee_count - 1, 0)
+  where id = p_event_id
+  returning attendee_count into new_count;
+  return new_count;
+end;
+$$;

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Response, Query
+from fastapi.responses import JSONResponse
 from typing import Any, Dict, cast
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -43,7 +44,7 @@ class UniNearBackend:
         self.app.post("/events")(self.create_event)
         self.app.delete("/events/{event_id}")(self.delete_event)
         self.app.patch("/events/{event_id}")(self.update_event)
-        self.app.post("/events/{event_id}/rsvp")(self.create_rsvp)
+        self.app.post("/api/rsvp", status_code=201)(self.create_rsvp)
         self.app.delete("/events/{event_id}/rsvp")(self.cancel_rsvp)
         # RSVP Routes
         self.app.get("/api/rsvp")(self.get_rsvps)
@@ -150,11 +151,9 @@ class UniNearBackend:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    def create_rsvp(self, event_id: int, attendance: EventAttendanceSchema) -> Dict[str, Any]:
+    def create_rsvp(self, attendance: EventAttendanceSchema) -> JSONResponse:
+        event_id = attendance.event_id
         try:
-            if attendance.event_id != event_id:
-                raise HTTPException(status_code=400, detail="Event ID mismatch")
-
             # SCRUM-348: Check for duplicate RSVP
             existing = (
                 self.db.client
@@ -165,7 +164,7 @@ class UniNearBackend:
                 .execute()
             )
             if existing.data:
-                raise HTTPException(status_code=409, detail="User has already RSVP'd to this event")
+                raise HTTPException(status_code=409, detail="Already RSVP'd")
 
             # SCRUM-349: Check capacity
             event_response = (
@@ -181,19 +180,23 @@ class UniNearBackend:
             capacity = int(event_data.get("capacity") or 0)
 
             if current_count >= capacity:
-                raise HTTPException(status_code=409, detail="Event is at full capacity")
+                raise HTTPException(status_code=400, detail="Event is full")
 
             payload: Dict[str, Any] = {"event_id": event_id, "user_id": attendance.user_id}
             response = self.db.client.table("event_attendance").insert(payload).execute()
 
-            updated_count = current_count + 1
-            self.db.client.table("events").update({"attendee_count": updated_count}).eq("id", event_id).execute()
+            # Atomic increment via RPC (prevents race conditions)
+            self.db.client.rpc("increment_attendee_count", {"p_event_id": event_id}).execute()
 
             response_data = cast(list[Dict[str, Any]], response.data) if response.data else []
-            return response_data[0] if response_data else {"event_id": event_id, "user_id": attendance.user_id}
+            result = response_data[0] if response_data else {"event_id": event_id, "user_id": attendance.user_id}
+            return JSONResponse(content=result, status_code=201)
         except HTTPException:
             raise
         except Exception as e:
+            # Handle DB unique constraint as 409 fallback
+            if "unique_rsvp" in str(e).lower() or "duplicate" in str(e).lower():
+                raise HTTPException(status_code=409, detail="Already RSVP'd")
             raise HTTPException(status_code=400, detail=str(e))
 
     def cancel_rsvp(self, event_id: int, attendance: EventAttendanceSchema):
@@ -201,27 +204,20 @@ class UniNearBackend:
             if attendance.event_id != event_id:
                 raise HTTPException(status_code=400, detail="Event ID mismatch")
 
-            delete_query = self.db.client.table("event_attendance").delete().eq("event_id", event_id)
-            if attendance.user_id:
-                delete_query = delete_query.eq("user_id", attendance.user_id)
-            delete_response = delete_query.execute()
+            delete_response = (
+                self.db.client
+                .table("event_attendance")
+                .delete()
+                .eq("event_id", event_id)
+                .eq("user_id", attendance.user_id)
+                .execute()
+            )
 
             if not delete_response.data:
                 raise HTTPException(status_code=404, detail="RSVP not found")
 
-            event_response = (
-                self.db.client
-                .table("events")
-                .select("attendee_count")
-                .eq("id", event_id)
-                .single()
-                .execute()
-            )
-            event_data: Dict[str, Any] = event_response.data if isinstance(event_response.data, dict) else {}
-            current_count = int(event_data.get("attendee_count") or 0)
-            updated_count = max(current_count - 1, 0)
-
-            self.db.client.table("events").update({"attendee_count": updated_count}).eq("id", event_id).execute()
+            # Atomic decrement via RPC (prevents race conditions)
+            self.db.client.rpc("decrement_attendee_count", {"p_event_id": event_id}).execute()
 
             return Response(status_code=204)
         except HTTPException:
