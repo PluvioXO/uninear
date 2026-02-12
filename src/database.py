@@ -16,5 +16,9 @@ class Database:
         if not url or not key:
             raise ValueError("Missing SUPABASE_URL or SUPABASE_KEY in .env file. Did you forget to save them?")
 
-        # Initialize the Supabase client
+        # Initialize the Supabase client (anon key – respects RLS)
         self.client: Client = create_client(url, key)
+
+        # Admin client (service_role key – bypasses RLS, used for auth lookups)
+        service_role_key: str = os.environ.get("SERVICE_ROLE_KEY", "")
+        self.admin: Client | None = create_client(url, service_role_key) if service_role_key else None

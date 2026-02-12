@@ -47,6 +47,7 @@ class UniNearBackend:
         self.app.delete("/events/{event_id}/rsvp")(self.cancel_rsvp)
         # RSVP Routes
         self.app.get("/api/rsvp")(self.get_rsvps)
+        self.app.get("/api/events/{event_id}/rsvps")(self.get_event_rsvps)
 
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
@@ -260,6 +261,42 @@ class UniNearBackend:
                 }
                 for row in attendance_rows
             ]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def get_event_rsvps(self, event_id: int) -> list[Dict[str, Any]]:
+        """GET /api/events/{event_id}/rsvps — Return RSVPs for an organiser's event."""
+        try:
+            attendance_response = (
+                self.db.client
+                .table("event_attendance")
+                .select("user_id, created_at")
+                .eq("event_id", event_id)
+                .execute()
+            )
+            attendance_rows = cast(list[Dict[str, Any]], attendance_response.data or [])
+
+            if not attendance_rows:
+                return []
+
+            # Fetch user details via admin client (service_role bypasses RLS on auth.users)
+            results: list[Dict[str, Any]] = []
+            for row in attendance_rows:
+                user_info: Dict[str, Any] = {"user_id": row["user_id"], "name": None, "email": None}
+                if self.db.admin:
+                    try:
+                        user = self.db.admin.auth.admin.get_user_by_id(row["user_id"])
+                        if user and user.user:
+                            user_info["email"] = user.user.email
+                            user_info["name"] = (user.user.user_metadata or {}).get("full_name")
+                    except Exception:
+                        pass  # Graceful fallback if user lookup fails
+                results.append({
+                    **user_info,
+                    "rsvp_time": row["created_at"],
+                })
+
+            return results
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 

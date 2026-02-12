@@ -240,6 +240,32 @@ def test_get_rsvps_with_event_data():
         assert isinstance(body, list)
         assert body[0]["event"]["id"] == 10
 
+# 8b. Test Get Event RSVPs for organiser (returns user name, email, rsvp_time)
+def test_get_event_rsvps():
+    attendance_response = MagicMock()
+    attendance_response.data = [
+        {"user_id": "uid-abc", "created_at": "2025-02-01T10:00:00"}
+    ]
+
+    attendance_table = MagicMock()
+    attendance_table.select.return_value.eq.return_value.execute.return_value = attendance_response
+
+    mock_user = MagicMock()
+    mock_user.user.email = "alice@bath.ac.uk"
+    mock_user.user.user_metadata = {"full_name": "Alice Smith"}
+
+    with patch.object(backend.db.client, 'table', return_value=attendance_table):
+        with patch.object(backend.db.admin.auth.admin, 'get_user_by_id', return_value=mock_user) as mock_get:
+            response = client.get("/api/events/1/rsvps")
+
+            assert response.status_code == 200
+            body = response.json()
+            assert len(body) == 1
+            assert body[0]["name"] == "Alice Smith"
+            assert body[0]["email"] == "alice@bath.ac.uk"
+            assert body[0]["rsvp_time"] == "2025-02-01T10:00:00"
+            mock_get.assert_called_once_with("uid-abc")
+
 # 9. Test Signup
 def test_signup():
     mock_response = MagicMock()
