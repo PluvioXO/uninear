@@ -123,19 +123,19 @@ export default function Home() {
                   {
                     title: 'Unified brief',
                     description: 'Drop logistics, run of show, and sponsor asks into one live doc that updates everyone.',
-                    badge: 'reactbits.dev / spotlight-card',
+                    badge: 'Uninear',
                     footer: 'Syncs with Notion · ClickUp'
                   },
                   {
                     title: 'Crew automations',
                     description: 'Auto-sync rosters to WhatsApp, Teams, or email with shift reminders.',
-                    badge: 'reactbits.dev / motion cues',
+                    badge: 'uninear',
                     footer: 'Hands-off scheduling pulses'
                   },
                   {
                     title: 'Instant RSVPs',
                     description: 'Track capacity and waitlists in real time as invites go out.',
-                    badge: 'reactbits.dev / data ticker',
+                    badge: 'uninear',
                     footer: 'Streams straight into analytics'
                   }
                 ].map(card => (
