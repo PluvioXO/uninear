@@ -180,22 +180,22 @@ export default function Home() {
           <div className="flex flex-col md:flex-row items-center justify-center gap-16">
             <div className="w-full md:w-1/2">
               <p className="text-sm uppercase tracking-[0.3em] text-orange-600 mb-4">Entry Flow</p>
-              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900">Reflective passes that just work</h2>
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900">Event management that just works</h2>
               <p className="text-gray-500 text-lg mb-8">
-                Digital IDs update in real time as committees tweak guest lists. Scan codes indoors or outdoors without losing fidelity.
+                Allowing for attendence management and regulation wihile not compromising student experience or inference.
               </p>
               <ul className="space-y-4 text-gray-700">
                 <li className="flex items-center gap-3">
                   <div className="w-2 h-2 bg-orange-600 rounded-full" />
-                  Dynamic holographic security
+                  Real time counts
                 </li>
                 <li className="flex items-center gap-3">
                   <div className="w-2 h-2 bg-orange-600 rounded-full" />
-                  Real-time verification with offline fallback
+                  Scalable events
                 </li>
                 <li className="flex items-center gap-3">
                   <div className="w-2 h-2 bg-orange-600 rounded-full" />
-                  Auto-sync attendance to analytics
+                  Build in event inference
                 </li>
               </ul>
             </div>

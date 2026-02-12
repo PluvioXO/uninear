@@ -126,14 +126,14 @@ const ReflectiveCard: React.FC<ReflectiveCardProps> = ({
         <div className="flex-1 flex flex-col justify-end items-center text-center gap-6 mb-8">
           <div className="text-center">
             <h2 className="text-2xl font-bold tracking-[0.05em] m-0 mb-2 drop-shadow-md">ALEXANDER DOE</h2>
-            <p className="text-xs tracking-[0.2em] opacity-70 m-0 uppercase">SENIOR DEVELOPER</p>
+            <p className="text-xs tracking-[0.2em] opacity-70 m-0 uppercase">STUDENT</p>
           </div>
         </div>
 
         <div className="flex justify-between items-end border-t border-white/20 pt-6">
           <div className="flex flex-col gap-1">
             <span className="text-[9px] tracking-[0.1em] opacity-60">ID NUMBER</span>
-            <span className="font-mono text-sm tracking-[0.05em]">8901-2345-6789</span>
+            <span className="font-mono text-sm tracking-[0.05em]">XXXX-XXXX-XXXX</span>
           </div>
           <div className="opacity-40">
             <Fingerprint size={32} />
