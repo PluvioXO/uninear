@@ -100,9 +100,10 @@ export default function LoginPage() {
                     inputMode="numeric"
                     maxLength={6}
                     placeholder="6-digit code"
+                    disabled={!loginOtpSent}
                     value={loginOtpInput}
                     onChange={(event) => setLoginOtpInput(event.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <button
                     type="button"
