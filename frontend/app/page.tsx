@@ -96,8 +96,7 @@ export default function Home() {
               type="button"
             />
             <MagneticButton
-              label="View dashboards"
-              subtitle="Scroll data"
+              label="View dashboard"
               className="border border-gray-200 bg-white text-gray-900"
               accentClassName="from-orange-500/60 via-amber-500/60 to-yellow-500/60"
               type="button"
