@@ -14,19 +14,20 @@ export default function LoginPage() {
   const [loginOtpInput, setLoginOtpInput] = useState('');
   const [loginOtpSent, setLoginOtpSent] = useState(false);
 
-  const isValidEmail = (value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+  const isBathEmail = (value: string) => /^[^@\s]+@bath\.ac\.uk$/i.test(value);
+  const showEmailError = email.length > 0 && !isBathEmail(email);
 
   const createMockOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
   const handleSendLoginOtp = () => {
-    if (!isValidEmail(email)) return;
+    if (!isBathEmail(email)) return;
     setLoginOtp(createMockOtp());
     setLoginOtpInput('');
     setLoginOtpSent(true);
   };
 
   const isNextDisabled = (step: number) => {
-    if (step === 1) return !isValidEmail(email) || !loginOtpSent || loginOtpInput !== loginOtp;
+    if (step === 1) return !isBathEmail(email) || !loginOtpSent || loginOtpInput !== loginOtp;
     if (step === 2) return password.trim().length === 0;
     return false;
   };
@@ -73,7 +74,7 @@ export default function LoginPage() {
                 <input
                   id="email"
                   type="email"
-                  placeholder="president@society.com"
+                  placeholder="name@bath.ac.uk"
                   required
                   pattern="^[^@\s]+@[^@\s]+\.[^@\s]+$"
                   title="Please enter a valid email address."
@@ -86,7 +87,11 @@ export default function LoginPage() {
                   }}
                   className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
                 />
-                <p className="text-xs text-gray-500">Use the email associated with your society account.</p>
+                {showEmailError ? (
+                  <p className="text-xs text-red-600">Only @bath.ac.uk emails are allowed</p>
+                ) : (
+                  <p className="text-xs text-gray-500">Use the email associated with your society account.</p>
+                )}
               </div>
 
               <div className="space-y-2">

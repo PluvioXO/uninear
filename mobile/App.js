@@ -159,12 +159,13 @@ export default function App() {
     </View>
   );
 
-  const isValidEmail = (email) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
-  const isProfileSaveDisabled = !isValidEmail(editForm.email);
+  const isBathEmail = (email) => /^[^@\s]+@bath\.ac\.uk$/i.test(email);
+  const showEmailError = editForm.email.length > 0 && !isBathEmail(editForm.email);
+  const isProfileSaveDisabled = !isBathEmail(editForm.email);
 
   const saveProfile = () => {
-    if (!isValidEmail(editForm.email)) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address before saving.');
+    if (!isBathEmail(editForm.email)) {
+      Alert.alert('Invalid Email', 'Only @bath.ac.uk emails are allowed');
       return;
     }
 
@@ -193,13 +194,16 @@ export default function App() {
 
           <Text style={styles.label}>Email</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, showEmailError && styles.inputError]}
             value={editForm.email}
             keyboardType="email-address"
             autoCapitalize="none"
             onChangeText={(text) => setEditForm({...editForm, email: text})}
           />
-          
+          {showEmailError && (
+            <Text style={styles.errorText}>Only @bath.ac.uk emails are allowed</Text>
+          )}
+
           <Text style={styles.label}>Bio</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
@@ -1044,6 +1048,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#eee',
+  },
+  inputError: {
+    borderColor: '#ef4444',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: 4,
   },
   textArea: {
     height: 100,

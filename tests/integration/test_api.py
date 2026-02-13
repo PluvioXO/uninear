@@ -296,10 +296,10 @@ def test_FR14_get_event_rsvps():
 # 9. Test Signup
 def test_signup():
     mock_response = MagicMock()
-    # Mocking what Supabase Auth response looks like roughly
     mock_response.user.id = "user-123"
     mock_response.user.email = "test@bath.ac.uk"
-    
+    mock_response.user.identities = [{"id": "identity-1"}]  # Non-empty = new user
+
     payload: dict[str, Any] = {
         "email": "test@bath.ac.uk",
         "password": "strongpassword",
@@ -310,10 +310,76 @@ def test_signup():
         mock_auth.sign_up.return_value = mock_response
 
         response = client.post("/auth/signup", json=payload)
-        
+
         assert response.status_code == 200
-        # The endpoint returns the whole response object, we might want to check its content
-        # Note: Response serialization might vary, but usually status 200 is good enough for now with mock
+        body = response.json()
+        assert body["user"]["id"] == "user-123"
+        assert body["user"]["email"] == "test@bath.ac.uk"
+
+# --- NFR-08: User Registration Tests ---
+
+def test_NFR08_signup_duplicate_email_identities():
+    """Duplicate user detected via empty identities array (email confirmation enabled)."""
+    mock_response = MagicMock()
+    mock_response.user.id = "user-existing"
+    mock_response.user.email = "dupe@bath.ac.uk"
+    mock_response.user.identities = []  # Empty = duplicate
+
+    payload: dict[str, Any] = {
+        "email": "dupe@bath.ac.uk",
+        "password": "strongpassword",
+        "full_name": "Dupe User"
+    }
+
+    with patch.object(backend.db.client, 'auth') as mock_auth:
+        mock_auth.sign_up.return_value = mock_response
+        response = client.post("/auth/signup", json=payload)
+
+    assert response.status_code == 409
+    assert "An account with this email already exists" in response.json()["detail"]
+
+def test_NFR08_signup_duplicate_email_exception():
+    """Duplicate user detected via Supabase 'already registered' exception."""
+    payload: dict[str, Any] = {
+        "email": "dupe@bath.ac.uk",
+        "password": "strongpassword",
+        "full_name": "Dupe User"
+    }
+
+    with patch.object(backend.db.client, 'auth') as mock_auth:
+        mock_auth.sign_up.side_effect = Exception("User already registered")
+        response = client.post("/auth/signup", json=payload)
+
+    assert response.status_code == 409
+    assert "An account with this email already exists" in response.json()["detail"]
+
+def test_NFR08_signup_non_bath_email():
+    """Non-bath email rejected at endpoint level."""
+    payload: dict[str, Any] = {
+        "email": "user@gmail.com",
+        "password": "strongpassword",
+        "full_name": "Test User"
+    }
+    response = client.post("/auth/signup", json=payload)
+    assert response.status_code == 422  # Pydantic validation rejects before endpoint
+
+def test_NFR08_signup_missing_password():
+    """Missing password field returns validation error."""
+    payload: dict[str, Any] = {
+        "email": "test@bath.ac.uk"
+    }
+    response = client.post("/auth/signup", json=payload)
+    assert response.status_code == 422
+
+def test_NFR08_signup_weak_password():
+    """Password shorter than 8 characters is rejected by Pydantic validator."""
+    payload: dict[str, Any] = {
+        "email": "test@bath.ac.uk",
+        "password": "short",
+        "full_name": "Test User"
+    }
+    response = client.post("/auth/signup", json=payload)
+    assert response.status_code == 422
 
 # 10. Test Login
 def test_login():

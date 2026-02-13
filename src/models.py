@@ -31,12 +31,19 @@ class UserSignupSchema(BaseModel):
     password: str
     full_name: Optional[str] = None
 
+    @field_validator("password")
+    @classmethod
+    def validate_password_length(cls, value: str) -> str:
+        if len(value) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return value
+
     @field_validator("email")
     @classmethod
     def validate_bath_email(cls, value: str) -> str:
         if not value.lower().endswith("@bath.ac.uk"):
             raise ValueError("Only @bath.ac.uk emails are allowed")
-        return value
+        return value.lower()
 
 class UserLoginSchema(BaseModel):
     email: str

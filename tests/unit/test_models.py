@@ -98,6 +98,32 @@ def test_user_signup_schema_rejects_non_bath_email():
     with pytest.raises(ValidationError):
         UserSignupSchema(**data)
 
+# --- NFR-07: Bath Email Validation ---
+
+class TestNFR07BathEmailValidation:
+    """Comprehensive Bath email validation tests per Story 1.1 AC 1, 2."""
+
+    def test_NFR07_valid_bath_email(self):
+        user = UserSignupSchema(email="ab1234@bath.ac.uk", password="pass1234")
+        assert user.email == "ab1234@bath.ac.uk"
+
+    def test_NFR07_valid_bath_email_case_insensitive(self):
+        user = UserSignupSchema(email="AB1234@Bath.AC.UK", password="pass1234")
+        assert user.email.lower().endswith("@bath.ac.uk")
+
+    def test_NFR07_rejects_non_bath_email_with_message(self):
+        with pytest.raises(ValidationError) as excinfo:
+            UserSignupSchema(email="user@gmail.com", password="pass123")
+        assert "Only @bath.ac.uk emails are allowed" in str(excinfo.value)
+
+    def test_NFR07_rejects_empty_email(self):
+        with pytest.raises(ValidationError):
+            UserSignupSchema(email="", password="pass123")
+
+    def test_NFR07_rejects_malformed_email(self):
+        with pytest.raises(ValidationError):
+            UserSignupSchema(email="notanemail", password="pass123")
+
 def test_user_login_schema_valid():
     """Test that UserLoginSchema accepts valid data."""
     data = {

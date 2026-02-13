@@ -2,54 +2,63 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import ReactBitsBeams from '@/components/ReactBitsBeams';
 import Stepper, { Step } from '@/components/Stepper';
+import { signup } from '@/lib/auth';
 
 export default function SignupPage() {
+  const router = useRouter();
   const [name, setName] = useState('');
   const [society, setSociety] = useState('');
   const [email, setEmail] = useState('');
-  const [verificationEmail, setVerificationEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [emailOtp, setEmailOtp] = useState('');
-  const [emailOtpInput, setEmailOtpInput] = useState('');
-  const [emailOtpSent, setEmailOtpSent] = useState(false);
-  const [verificationOtp, setVerificationOtp] = useState('');
-  const [verificationOtpInput, setVerificationOtpInput] = useState('');
-  const [verificationOtpSent, setVerificationOtpSent] = useState(false);
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isValidEmail = (value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
-  const isBathEmail = (value: string) => /^[^@\s]+@bath\.ac\.uk$/.test(value);
-  const showVerificationError = verificationEmail.length > 0 && !isBathEmail(verificationEmail);
-
-  const createMockOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
-
-  const handleSendEmailOtp = () => {
-    if (!isValidEmail(email)) return;
-    setEmailOtp(createMockOtp());
-    setEmailOtpInput('');
-    setEmailOtpSent(true);
-  };
-
-  const handleSendVerificationOtp = () => {
-    if (!isBathEmail(verificationEmail)) return;
-    setVerificationOtp(createMockOtp());
-    setVerificationOtpInput('');
-    setVerificationOtpSent(true);
-  };
+  const isBathEmail = (value: string) => /^[^@\s]+@bath\.ac\.uk$/i.test(value);
+  const showEmailError = email.length > 0 && !isBathEmail(email);
+  const showPasswordError = password.length > 0 && password.length < 8;
 
   const isNextDisabled = (step: number) => {
     if (step === 1) return name.trim().length === 0 || society.trim().length === 0;
-    if (step === 2) return !isValidEmail(email) || !emailOtpSent || emailOtpInput !== emailOtp;
-    if (step === 3)
-      return !isBathEmail(verificationEmail) || !verificationOtpSent || verificationOtpInput !== verificationOtp;
-    if (step === 4) return password.trim().length === 0;
+    if (step === 2) return !isBathEmail(email);
+    if (step === 3) return password.trim().length < 8;
     return false;
   };
 
-  const handleSignup = () => {
-    if (isNextDisabled(1) || isNextDisabled(2) || isNextDisabled(3)) return;
-    console.log('Signup submitted', { name, society, email, verificationEmail });
+  const handleSignup = async () => {
+    if (isSubmitting) return;
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      const { data, error: authError } = await signup(email, password, {
+        metadata: { full_name: name, society },
+      });
+
+      if (authError) {
+        if (authError.message.toLowerCase().includes('already registered')) {
+          setError('An account with this email already exists');
+        } else {
+          setError(authError.message);
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Duplicate detection: Supabase returns user with empty identities
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setError('An account with this email already exists');
+        setIsSubmitting(false);
+        return;
+      }
+
+      router.push('/dashboard');
+    } catch {
+      setError('Something went wrong. Please try again.');
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -73,12 +82,18 @@ export default function SignupPage() {
             <p className="text-gray-500">Create an account for your society</p>
           </div>
 
+          {error && (
+            <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+
           <Stepper
-            onStepChange={(step) => console.log('Signup step', step)}
+            onStepChange={() => setError('')}
             onFinalStepCompleted={handleSignup}
             backButtonText="Previous"
             nextButtonText="Next"
-            finalButtonText="Create Account"
+            finalButtonText={isSubmitting ? 'Creating...' : 'Create Account'}
             isNextDisabled={isNextDisabled}
           >
             <Step>
@@ -114,118 +129,21 @@ export default function SignupPage() {
             <Step>
               <div className="space-y-2">
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email
+                  University Email (@bath.ac.uk)
                 </label>
                 <input
                   id="email"
                   type="email"
-                  placeholder="president@society.com"
-                  required
-                  pattern="^[^@\s]+@[^@\s]+\.[^@\s]+$"
-                  title="Please enter a valid email address."
-                  value={email}
-                  onChange={(event) => {
-                    setEmail(event.target.value);
-                    setEmailOtpSent(false);
-                    setEmailOtp('');
-                    setEmailOtpInput('');
-                  }}
-                  className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="emailOtp" className="block text-sm font-medium text-gray-700">
-                  Email OTP Code
-                </label>
-                <div className="flex gap-3">
-                  <input
-                    id="emailOtp"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="6-digit code"
-                    disabled={!emailOtpSent}
-                    value={emailOtpInput}
-                    onChange={(event) => setEmailOtpInput(event.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSendEmailOtp}
-                    className="whitespace-nowrap px-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:border-orange-400 hover:text-orange-600 transition-colors"
-                  >
-                    Send code
-                  </button>
-                </div>
-                {emailOtpSent ? (
-                  <p className="text-xs text-gray-500">
-                    Mock code sent: <span className="font-semibold text-gray-700">{emailOtp}</span>
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-500">Send a mock OTP to verify this email.</p>
-                )}
-              </div>
-            </Step>
-
-            <Step>
-              <div className="space-y-2">
-                <label htmlFor="verificationEmail" className="block text-sm font-medium text-gray-700">
-                  Verification Email (@bath.ac.uk)
-                </label>
-                <input
-                  id="verificationEmail"
-                  type="email"
                   placeholder="name@bath.ac.uk"
-                  pattern="^[^@\s]+@bath\.ac\.uk$"
-                  title="Please use your @bath.ac.uk email address."
                   required
-                  value={verificationEmail}
-                  onChange={(event) => {
-                    setVerificationEmail(event.target.value);
-                    setVerificationOtpSent(false);
-                    setVerificationOtp('');
-                    setVerificationOtpInput('');
-                  }}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
                 />
-                {showVerificationError ? (
-                  <p className="text-xs text-red-600">Verification email must end with @bath.ac.uk.</p>
+                {showEmailError ? (
+                  <p className="text-xs text-red-600">Only @bath.ac.uk emails are allowed</p>
                 ) : (
-                  <p className="text-xs text-gray-500">We&apos;ll send a verification link to this university email.</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="verificationOtp" className="block text-sm font-medium text-gray-700">
-                  Verification OTP Code
-                </label>
-                <div className="flex gap-3">
-                  <input
-                    id="verificationOtp"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="6-digit code"
-                    disabled={!verificationOtpSent}
-                    value={verificationOtpInput}
-                    onChange={(event) => setVerificationOtpInput(event.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSendVerificationOtp}
-                    className="whitespace-nowrap px-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:border-orange-400 hover:text-orange-600 transition-colors"
-                  >
-                    Send code
-                  </button>
-                </div>
-                {verificationOtpSent ? (
-                  <p className="text-xs text-gray-500">
-                    Mock code sent: <span className="font-semibold text-gray-700">{verificationOtp}</span>
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-500">Send a mock OTP to verify this email.</p>
+                  <p className="text-xs text-gray-500">Use your University of Bath email to verify your identity.</p>
                 )}
               </div>
             </Step>
@@ -243,7 +161,11 @@ export default function SignupPage() {
                   onChange={(event) => setPassword(event.target.value)}
                   className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
                 />
-                <p className="text-xs text-gray-500">Use at least 8 characters for a strong password.</p>
+                {showPasswordError ? (
+                  <p className="text-xs text-red-600">Password must be at least 8 characters</p>
+                ) : (
+                  <p className="text-xs text-gray-500">Use at least 8 characters for a strong password.</p>
+                )}
               </div>
             </Step>
 
@@ -260,11 +182,8 @@ export default function SignupPage() {
                   <li>
                     <span className="font-medium text-gray-700">Email:</span> {email || '—'}
                   </li>
-                  <li>
-                    <span className="font-medium text-gray-700">Verification:</span> {verificationEmail || '—'}
-                  </li>
                 </ul>
-                <p className="text-sm text-gray-500">Click “Create Account” to finish creating your society profile.</p>
+                <p className="text-sm text-gray-500">Click &quot;Create Account&quot; to finish creating your society profile.</p>
               </div>
             </Step>
           </Stepper>

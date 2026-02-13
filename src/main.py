@@ -300,9 +300,6 @@ class UniNearBackend:
 
     def signup(self, user: UserSignupSchema):
         try:
-            if not user.email.lower().endswith("@bath.ac.uk"):
-                raise HTTPException(status_code=400, detail="Only @bath.ac.uk emails are allowed")
-
             response = self.db.client.auth.sign_up({
                 "email": user.email,
                 "password": user.password,
@@ -312,8 +309,23 @@ class UniNearBackend:
                     }
                 }
             })
-            return response
+
+            # Detect duplicate user (Supabase returns user with empty identities when email confirmation is on)
+            if (response.user
+                    and hasattr(response.user, 'identities')
+                    and response.user.identities is not None
+                    and len(response.user.identities) == 0):
+                raise HTTPException(status_code=409, detail="An account with this email already exists")
+
+            if not response.user:
+                raise HTTPException(status_code=500, detail="Signup failed: no user returned")
+
+            return {"user": {"id": response.user.id, "email": response.user.email}}
+        except HTTPException:
+            raise
         except Exception as e:
+            if "already registered" in str(e).lower():
+                raise HTTPException(status_code=409, detail="An account with this email already exists")
             raise HTTPException(status_code=400, detail=str(e))
 
     def login(self, user: UserLoginSchema):
