@@ -95,8 +95,8 @@ export default function AnalyticsDashboard() {
             <Link href="/dashboard" className="text-2xl font-bold tracking-tighter text-orange-600">UNINEAR</Link>
             <div className="hidden md:flex space-x-6 text-sm font-medium">
               <Link href="/dashboard" className="text-gray-500 hover:text-gray-900 transition-colors">Overview</Link>
-              <Link href="#" className="text-gray-500 hover:text-gray-900 transition-colors">Events</Link>
-              <Link href="#" className="text-gray-500 hover:text-gray-900 transition-colors">Members</Link>
+              <Link href="/dashboard/events" className="text-gray-500 hover:text-gray-900 transition-colors">Events</Link>
+              <Link href="/dashboard/members" className="text-gray-500 hover:text-gray-900 transition-colors">Members</Link>
               <Link href="/dashboard/analytics" className="text-gray-900 font-semibold">Analytics</Link>
               <Link href="/dashboard/settings" className="text-gray-500 hover:text-gray-900 transition-colors">Settings</Link>
             </div>
