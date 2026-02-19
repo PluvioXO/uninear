@@ -381,19 +381,54 @@ def test_NFR08_signup_weak_password():
     response = client.post("/auth/signup", json=payload)
     assert response.status_code == 422
 
-# 10. Test Login
-def test_login():
+# --- NFR-08: User Login Tests ---
+
+def test_NFR08_user_login_valid():
+    """Valid credentials return 200 with session containing access_token."""
     mock_response = MagicMock()
-    mock_response.session.access_token = "fake-token"
-    
+    mock_response.session.access_token = "fake-jwt-token"
+    mock_response.user.id = "user-123"
+    mock_response.user.email = "test@bath.ac.uk"
+
     payload: dict[str, Any] = {
-        "email": "test@example.com",
+        "email": "test@bath.ac.uk",
         "password": "strongpassword"
     }
 
     with patch.object(backend.db.client, 'auth') as mock_auth:
         mock_auth.sign_in_with_password.return_value = mock_response
-
         response = client.post("/auth/login", json=payload)
-        
+
         assert response.status_code == 200
+        mock_auth.sign_in_with_password.assert_called_once_with({
+            "email": "test@bath.ac.uk",
+            "password": "strongpassword"
+        })
+
+def test_NFR08_user_login_invalid_password():
+    """Invalid password returns 401 with 'Invalid email or password'."""
+    payload: dict[str, Any] = {
+        "email": "test@bath.ac.uk",
+        "password": "wrongpassword"
+    }
+
+    with patch.object(backend.db.client, 'auth') as mock_auth:
+        mock_auth.sign_in_with_password.side_effect = Exception("Invalid login credentials")
+        response = client.post("/auth/login", json=payload)
+
+        assert response.status_code == 401
+        assert "Invalid email or password" in response.json()["detail"]
+
+def test_NFR08_user_login_nonexistent_email():
+    """Non-existent email returns 401 with 'Invalid email or password'."""
+    payload: dict[str, Any] = {
+        "email": "nonexistent@bath.ac.uk",
+        "password": "somepassword"
+    }
+
+    with patch.object(backend.db.client, 'auth') as mock_auth:
+        mock_auth.sign_in_with_password.side_effect = Exception("Invalid login credentials")
+        response = client.post("/auth/login", json=payload)
+
+        assert response.status_code == 401
+        assert "Invalid email or password" in response.json()["detail"]

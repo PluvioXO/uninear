@@ -336,6 +336,9 @@ class UniNearBackend:
             })
             return response
         except Exception as e:
+            error_msg = str(e).lower()
+            if "invalid" in error_msg or "credentials" in error_msg or "not found" in error_msg:
+                raise HTTPException(status_code=401, detail="Invalid email or password")
             raise HTTPException(status_code=400, detail=str(e))
 
 # Create the app instance for uvicorn to pick up

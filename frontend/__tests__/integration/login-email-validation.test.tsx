@@ -17,6 +17,10 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
 }))
 
+jest.mock('../../lib/auth', () => ({
+  login: jest.fn(),
+}))
+
 describe('test_NFR07_bath_email_validation - Login Page', () => {
   it('AC1: shows error for non-bath email', () => {
     render(<LoginPage />)
@@ -24,10 +28,11 @@ describe('test_NFR07_bath_email_validation - Login Page', () => {
     expect(screen.getByText('Only @bath.ac.uk emails are allowed')).toBeInTheDocument()
   })
 
-  it('AC1: Next button disabled with non-bath email', () => {
+  it('AC1: Sign In button disabled with non-bath email', () => {
     render(<LoginPage />)
     fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'user@gmail.com' } })
-    expect(screen.getByRole('button', { name: /next/i })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'testpass123' } })
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeDisabled()
   })
 
   it('AC2: no error for valid bath email', () => {
@@ -36,10 +41,10 @@ describe('test_NFR07_bath_email_validation - Login Page', () => {
     expect(screen.queryByText('Only @bath.ac.uk emails are allowed')).not.toBeInTheDocument()
   })
 
-  it('AC2: Send code button works with bath email', () => {
+  it('AC2: Sign In button enabled with valid bath email and password', () => {
     render(<LoginPage />)
     fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'ab1234@bath.ac.uk' } })
-    fireEvent.click(screen.getByRole('button', { name: /send code/i }))
-    expect(screen.getByText(/mock code sent/i)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'testpass123' } })
+    expect(screen.getByRole('button', { name: /sign in/i })).not.toBeDisabled()
   })
 })
