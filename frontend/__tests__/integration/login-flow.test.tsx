@@ -98,4 +98,20 @@ describe('test_NFR08_user_login - Login Flow', () => {
     render(<LoginPage />)
     expect(screen.getByRole('button', { name: /sign in/i })).toBeDisabled()
   })
+
+  it('AC2: network error shows "Invalid email or password" and stays on login page', async () => {
+    mockedLogin.mockRejectedValue(new Error('Network error'))
+
+    render(<LoginPage />)
+
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'test@bath.ac.uk' } })
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'strongpassword' } })
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Invalid email or password')).toBeInTheDocument()
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+      expect(mockPush).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -125,14 +125,23 @@ class TestNFR07BathEmailValidation:
             UserSignupSchema(email="notanemail", password="pass123")
 
 def test_user_login_schema_valid():
-    """Test that UserLoginSchema accepts valid data."""
+    """Test that UserLoginSchema accepts valid bath email and normalizes to lowercase."""
     data = {
-        "email": "test@example.com",
+        "email": "Test@Bath.ac.uk",
         "password": "secretpassword"
     }
     user = UserLoginSchema(**data)
-    assert user.email == "test@example.com"
+    assert user.email == "test@bath.ac.uk"
     assert user.password == "secretpassword"
+
+def test_user_login_schema_rejects_non_bath_email():
+    """Test that UserLoginSchema rejects non-bath emails."""
+    data = {
+        "email": "test@gmail.com",
+        "password": "secretpassword"
+    }
+    with pytest.raises(ValidationError):
+        UserLoginSchema(**data)
 
 def test_user_signup_schema_missing_required():
     """Test that UserSignupSchema raises error when required fields are missing."""

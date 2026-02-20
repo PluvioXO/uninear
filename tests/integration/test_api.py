@@ -385,10 +385,12 @@ def test_NFR08_signup_weak_password():
 
 def test_NFR08_user_login_valid():
     """Valid credentials return 200 with session containing access_token."""
-    mock_response = MagicMock()
-    mock_response.session.access_token = "fake-jwt-token"
-    mock_response.user.id = "user-123"
-    mock_response.user.email = "test@bath.ac.uk"
+    from types import SimpleNamespace
+
+    mock_response = SimpleNamespace(
+        session={"access_token": "fake-jwt-token", "token_type": "bearer"},
+        user={"id": "user-123", "email": "test@bath.ac.uk"},
+    )
 
     payload: dict[str, Any] = {
         "email": "test@bath.ac.uk",
@@ -400,6 +402,10 @@ def test_NFR08_user_login_valid():
         response = client.post("/auth/login", json=payload)
 
         assert response.status_code == 200
+        body = response.json()
+        assert "session" in body
+        assert body["session"]["access_token"] == "fake-jwt-token"
+        assert body["user"]["email"] == "test@bath.ac.uk"
         mock_auth.sign_in_with_password.assert_called_once_with({
             "email": "test@bath.ac.uk",
             "password": "strongpassword"

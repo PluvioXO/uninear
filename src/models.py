@@ -49,6 +49,13 @@ class UserLoginSchema(BaseModel):
     email: str
     password: str
 
+    @field_validator("email")
+    @classmethod
+    def validate_and_normalize_email(cls, value: str) -> str:
+        if not value.lower().endswith("@bath.ac.uk"):
+            raise ValueError("Only @bath.ac.uk emails are allowed")
+        return value.lower()
+
 class EventAttendanceSchema(BaseModel):
     event_id: int
     user_id: str
