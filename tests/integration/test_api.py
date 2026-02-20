@@ -1,6 +1,7 @@
 import os
 from typing import Any
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
 # Set dummy env vars BEFORE importing src.main to avoid Database init error
 os.environ["SUPABASE_URL"] = "https://example.supabase.co"
@@ -10,6 +11,24 @@ from fastapi.testclient import TestClient
 from src.main import app, backend
 
 client = TestClient(app)
+
+# --- Auth helper: mock a valid authenticated request ---
+VALID_TOKEN = "valid-test-token"
+AUTH_HEADER = {"Authorization": f"Bearer {VALID_TOKEN}"}
+MOCK_USER_ID = "user-auth-123"
+
+def mock_get_user_success(token: str):
+    """Simulate Supabase auth.get_user returning a valid user."""
+    mock_user = MagicMock()
+    mock_user.user.id = MOCK_USER_ID
+    mock_user.user.email = "test@bath.ac.uk"
+    return mock_user
+
+def patch_auth_valid():
+    """Context manager to patch auth.get_user for valid token."""
+    return patch.object(backend.db.client, 'auth', **{
+        'get_user.side_effect': mock_get_user_success
+    })
 
 # --- API TESTS ---
 
@@ -47,31 +66,32 @@ def test_create_event():
         "organizer": "Test Org"
     }
 
-    with patch.object(backend.db.client, 'table') as mock_table:
-        mock_table.return_value.insert.return_value.execute.return_value = mock_response
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table') as mock_table:
+            mock_table.return_value.insert.return_value.execute.return_value = mock_response
 
-        response = client.post("/events", json=payload)
-        
-        assert response.status_code == 200
-        assert response.json()["title"] == "New Event"
-        
-        # Verify the mock was called correctly
-        mock_table.assert_called_with("events")
-        # Check if insert called (args verification is tricky with chained mocks, but checking call count helps)
-        assert mock_table.return_value.insert.called
+            response = client.post("/events", json=payload, headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+            assert response.json()["title"] == "New Event"
+
+            # Verify the mock was called correctly
+            mock_table.assert_called_with("events")
+            assert mock_table.return_value.insert.called
 
 # 4. Test Delete Event
 def test_delete_event():
     mock_response = MagicMock()
     mock_response.data = [] # Supabase delete returns data sometimes, but we just check success here
 
-    with patch.object(backend.db.client, 'table') as mock_table:
-        mock_table.return_value.delete.return_value.eq.return_value.execute.return_value = mock_response
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table') as mock_table:
+            mock_table.return_value.delete.return_value.eq.return_value.execute.return_value = mock_response
 
-        response = client.delete("/events/123")
-        
-        assert response.status_code == 200
-        assert response.json() == {"message": "Event deleted successfully"}
+            response = client.delete("/events/123", headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+            assert response.json() == {"message": "Event deleted successfully"}
 
 # 5. Test Update Event
 def test_update_event():
@@ -80,13 +100,14 @@ def test_update_event():
 
     payload: dict[str, Any] = {"title": "Updated Title"}
 
-    with patch.object(backend.db.client, 'table') as mock_table:
-        mock_table.return_value.update.return_value.eq.return_value.execute.return_value = mock_response
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table') as mock_table:
+            mock_table.return_value.update.return_value.eq.return_value.execute.return_value = mock_response
 
-        response = client.patch("/events/1", json=payload)
-        
-        assert response.status_code == 200
-        assert response.json()[0]["title"] == "Updated Title"
+            response = client.patch("/events/1", json=payload, headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+            assert response.json()[0]["title"] == "Updated Title"
 
 # 6. test_FR16_create_rsvp — RSVP creates record and returns 201
 def test_FR16_create_rsvp():
@@ -112,12 +133,13 @@ def test_FR16_create_rsvp():
     def table_side_effect(name: str):
         return attendance_table if name == "event_attendance" else events_table
 
-    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
-            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
-            response = client.post("/api/rsvp", json=payload)
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+            with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
+                payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+                response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
 
-            assert response.status_code == 201
+                assert response.status_code == 201
 
 # 6b. test_FR16_duplicate_rsvp_returns_409
 def test_FR16_duplicate_rsvp_returns_409():
@@ -132,12 +154,13 @@ def test_FR16_duplicate_rsvp_returns_409():
     def table_side_effect(name: str):
         return attendance_table if name == "event_attendance" else events_table
 
-    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
-        response = client.post("/api/rsvp", json=payload)
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+            response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
 
-        assert response.status_code == 409
-        assert "Already RSVP" in response.json()["detail"]
+            assert response.status_code == 409
+            assert "Already RSVP" in response.json()["detail"]
 
 # 6c. test_FR16_rsvp_at_capacity_returns_400
 def test_FR16_rsvp_at_capacity_returns_400():
@@ -156,12 +179,13 @@ def test_FR16_rsvp_at_capacity_returns_400():
     def table_side_effect(name: str):
         return attendance_table if name == "event_attendance" else events_table
 
-    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
-        response = client.post("/api/rsvp", json=payload)
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+            response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
 
-        assert response.status_code == 400
-        assert "Event is full" in response.json()["detail"]
+            assert response.status_code == 400
+            assert "Event is full" in response.json()["detail"]
 
 # 6d. test_NFR03_rsvp_performance — RSVP completes within 1 second
 def test_NFR03_rsvp_performance():
@@ -189,15 +213,16 @@ def test_NFR03_rsvp_performance():
     def table_side_effect(name: str):
         return attendance_table if name == "event_attendance" else events_table
 
-    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
-            start = time.time()
-            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
-            response = client.post("/api/rsvp", json=payload)
-            elapsed = time.time() - start
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+            with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
+                start = time.time()
+                payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+                response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
+                elapsed = time.time() - start
 
-            assert response.status_code == 201
-            assert elapsed < 1.0, f"RSVP took {elapsed:.3f}s, exceeds 1s NFR-03 limit"
+                assert response.status_code == 201
+                assert elapsed < 1.0, f"RSVP took {elapsed:.3f}s, exceeds 1s NFR-03 limit"
 
 # 7. test_FR17_cancel_rsvp_decrements_count
 def test_FR17_cancel_rsvp_decrements_count():
@@ -213,13 +238,14 @@ def test_FR17_cancel_rsvp_decrements_count():
     def table_side_effect(name: str):
         return attendance_table if name == "event_attendance" else MagicMock()
 
-    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))) as mock_rpc:
-            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
-            response = client.request("DELETE", "/events/1/rsvp", json=payload)
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+            with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))) as mock_rpc:
+                payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+                response = client.request("DELETE", "/events/1/rsvp", json=payload, headers=AUTH_HEADER)
 
-            assert response.status_code == 204
-            mock_rpc.assert_called_once_with("decrement_attendee_count", {"p_event_id": 1})
+                assert response.status_code == 204
+                mock_rpc.assert_called_once_with("decrement_attendee_count", {"p_event_id": 1})
 
 # 7b. test_FR17_cancel_rsvp_not_found
 def test_FR17_cancel_rsvp_not_found():
@@ -232,11 +258,12 @@ def test_FR17_cancel_rsvp_not_found():
     def table_side_effect(name: str):
         return attendance_table if name == "event_attendance" else MagicMock()
 
-    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
-        response = client.request("DELETE", "/events/1/rsvp", json=payload)
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+            response = client.request("DELETE", "/events/1/rsvp", json=payload, headers=AUTH_HEADER)
 
-        assert response.status_code == 404
+            assert response.status_code == 404
 
 # 8. test_FR21_get_user_rsvps_with_event_data
 def test_FR21_get_user_rsvps_with_event_data():
@@ -259,13 +286,14 @@ def test_FR21_get_user_rsvps_with_event_data():
     def table_side_effect(name: str):
         return attendance_table if name == "event_attendance" else events_table
 
-    with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-        response = client.get("/api/rsvp", params={"user_id": "user-1"})
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
+            response = client.get("/api/rsvp", params={"user_id": "user-1"}, headers=AUTH_HEADER)
 
-        assert response.status_code == 200
-        body = response.json()
-        assert isinstance(body, list)
-        assert body[0]["event"]["id"] == 10
+            assert response.status_code == 200
+            body = response.json()
+            assert isinstance(body, list)
+            assert body[0]["event"]["id"] == 10
 
 # 8b. test_FR14_get_event_rsvps — organiser views attendee list
 def test_FR14_get_event_rsvps():
@@ -281,17 +309,18 @@ def test_FR14_get_event_rsvps():
     mock_user.user.email = "alice@bath.ac.uk"
     mock_user.user.user_metadata = {"full_name": "Alice Smith"}
 
-    with patch.object(backend.db.admin, 'table', return_value=attendance_table):
-        with patch.object(backend.db.admin.auth.admin, 'get_user_by_id', return_value=mock_user) as mock_get:
-            response = client.get("/api/events/1/rsvps")
+    with patch_auth_valid():
+        with patch.object(backend.db.admin, 'table', return_value=attendance_table):
+            with patch.object(backend.db.admin.auth.admin, 'get_user_by_id', return_value=mock_user) as mock_get:
+                response = client.get("/api/events/1/rsvps", headers=AUTH_HEADER)
 
-            assert response.status_code == 200
-            body = response.json()
-            assert len(body) == 1
-            assert body[0]["name"] == "Alice Smith"
-            assert body[0]["email"] == "alice@bath.ac.uk"
-            assert body[0]["rsvp_time"] == "2025-02-01T10:00:00"
-            mock_get.assert_called_once_with("uid-abc")
+                assert response.status_code == 200
+                body = response.json()
+                assert len(body) == 1
+                assert body[0]["name"] == "Alice Smith"
+                assert body[0]["email"] == "alice@bath.ac.uk"
+                assert body[0]["rsvp_time"] == "2025-02-01T10:00:00"
+                mock_get.assert_called_once_with("uid-abc")
 
 # 9. Test Signup
 def test_signup():
@@ -438,3 +467,96 @@ def test_NFR08_user_login_nonexistent_email():
 
         assert response.status_code == 401
         assert "Invalid email or password" in response.json()["detail"]
+
+# --- NFR-10: API Authentication Middleware Tests ---
+
+def test_NFR10_no_token_returns_401():
+    """All protected endpoints return 401 without Authorization header."""
+    event_payload: dict[str, Any] = {
+        "title": "Test Event",
+        "date": "2025-12-01T10:00:00",
+        "location": "Room A",
+        "capacity": 50,
+        "organizer": "Test Org"
+    }
+    rsvp_payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+
+    protected_requests = [
+        ("POST", "/events", event_payload),
+        ("DELETE", "/events/1", None),
+        ("PATCH", "/events/1", {"title": "X"}),
+        ("POST", "/api/rsvp", rsvp_payload),
+        ("DELETE", "/events/1/rsvp", rsvp_payload),
+        ("GET", "/api/rsvp?user_id=u1", None),
+        ("GET", "/api/events/1/rsvps", None),
+    ]
+
+    for method, path, body in protected_requests:
+        kwargs: dict[str, Any] = {}
+        if body is not None:
+            kwargs["json"] = body
+        response = client.request(method, path, **kwargs)
+        assert response.status_code == 401, f"{method} {path} returned {response.status_code}, expected 401"
+        assert "Authorization required" in response.json()["detail"]
+
+def test_NFR10_valid_token_allows_request():
+    """Request with valid JWT proceeds to handler."""
+    mock_response = MagicMock()
+    mock_response.data = [{"id": 1, "title": "New Event", "status": "Draft"}]
+
+    payload: dict[str, Any] = {
+        "title": "New Event",
+        "date": "2025-12-01T10:00:00",
+        "location": "Room A",
+        "capacity": 50,
+        "organizer": "Test Org"
+    }
+
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table') as mock_table:
+            mock_table.return_value.insert.return_value.execute.return_value = mock_response
+            response = client.post("/events", json=payload, headers=AUTH_HEADER)
+            assert response.status_code == 200
+
+def test_NFR10_expired_token_returns_401():
+    """Request with expired JWT returns 401 with 'Token expired'."""
+    with patch.object(backend.db.client, 'auth') as mock_auth:
+        mock_auth.get_user.side_effect = Exception("Token expired")
+        response = client.post("/events", json={
+            "title": "Test", "date": "2025-12-01T10:00:00",
+            "location": "Room", "capacity": 10, "organizer": "Org"
+        }, headers=AUTH_HEADER)
+        assert response.status_code == 401
+        assert "Token expired" in response.json()["detail"]
+
+def test_NFR10_malformed_token_returns_401():
+    """Request with malformed JWT returns 401 with 'Invalid token'."""
+    with patch.object(backend.db.client, 'auth') as mock_auth:
+        mock_auth.get_user.side_effect = Exception("Invalid JWT")
+        response = client.post("/events", json={
+            "title": "Test", "date": "2025-12-01T10:00:00",
+            "location": "Room", "capacity": 10, "organizer": "Org"
+        }, headers={"Authorization": "Bearer malformed-token"})
+        assert response.status_code == 401
+        assert "Invalid token" in response.json()["detail"]
+
+def test_NFR10_empty_bearer_token_returns_401():
+    """Request with 'Bearer ' but no actual token returns 401."""
+    response = client.post("/events", json={
+        "title": "Test", "date": "2025-12-01T10:00:00",
+        "location": "Room", "capacity": 10, "organizer": "Org"
+    }, headers={"Authorization": "Bearer "})
+    assert response.status_code == 401
+    assert "Authorization required" in response.json()["detail"]
+
+def test_NFR10_public_endpoints_no_auth():
+    """Public endpoints (GET /events, auth routes) don't require auth."""
+    # GET /events should work without token
+    with patch.object(backend.db.client, 'table') as mock_table:
+        mock_table.return_value.select.return_value.execute.return_value = MagicMock(data=[])
+        response = client.get("/events")
+        assert response.status_code == 200
+
+    # GET / (root) should work without token
+    response = client.get("/")
+    assert response.status_code == 200

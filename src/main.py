@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Response, Query
+from fastapi import FastAPI, HTTPException, Response, Query, Depends, Request
 from fastapi.responses import JSONResponse
 from typing import Any, Dict, cast
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,10 +9,44 @@ from src.database import Database
 # --- MODELS ---
 from src.models import EventCreateSchema, EventUpdateSchema, UserSignupSchema, UserLoginSchema, EventAttendanceSchema
 
+
+# --- AUTH DEPENDENCY ---
+_db_instance: "Database | None" = None
+
+def _get_db() -> "Database":
+    if _db_instance is None:
+        raise RuntimeError("Database not initialised")
+    return _db_instance
+
+def verify_token(request: Request, db: Database = Depends(_get_db)) -> Dict[str, Any]:
+    """FastAPI dependency that verifies JWT from Authorization header."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization required")
+
+    token = auth_header.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Authorization required")
+
+    try:
+        user_response = db.client.auth.get_user(token)
+        if not user_response or not user_response.user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return {"user_id": user_response.user.id, "email": user_response.user.email}
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "expired" in error_msg:
+            raise HTTPException(status_code=401, detail="Token expired")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
 class UniNearBackend:
     def __init__(self):
         self.app = FastAPI()
         self.db = Database()
+        global _db_instance
+        _db_instance = self.db
         self.setup_middleware()
         self.setup_routes()
 
@@ -33,22 +67,21 @@ class UniNearBackend:
         )
 
     def setup_routes(self):
+        # Public endpoints (no auth required)
         self.app.get("/")(self.read_root)
-        
-        # Auth Routes
         self.app.post("/auth/signup")(self.signup)
         self.app.post("/auth/login")(self.login)
-
-        # Event Routes
         self.app.get("/events")(self.get_events)
-        self.app.post("/events")(self.create_event)
-        self.app.delete("/events/{event_id}")(self.delete_event)
-        self.app.patch("/events/{event_id}")(self.update_event)
-        self.app.post("/api/rsvp", status_code=201)(self.create_rsvp)
-        self.app.delete("/events/{event_id}/rsvp")(self.cancel_rsvp)
-        # RSVP Routes
-        self.app.get("/api/rsvp")(self.get_rsvps)
-        self.app.get("/api/events/{event_id}/rsvps")(self.get_event_rsvps)
+
+        # Protected endpoints (require valid JWT)
+        auth = [Depends(verify_token)]
+        self.app.post("/events", dependencies=auth)(self.create_event)
+        self.app.delete("/events/{event_id}", dependencies=auth)(self.delete_event)
+        self.app.patch("/events/{event_id}", dependencies=auth)(self.update_event)
+        self.app.post("/api/rsvp", status_code=201, dependencies=auth)(self.create_rsvp)
+        self.app.delete("/events/{event_id}/rsvp", dependencies=auth)(self.cancel_rsvp)
+        self.app.get("/api/rsvp", dependencies=auth)(self.get_rsvps)
+        self.app.get("/api/events/{event_id}/rsvps", dependencies=auth)(self.get_event_rsvps)
 
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
