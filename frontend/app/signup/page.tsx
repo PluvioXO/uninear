@@ -15,6 +15,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const isBathEmail = (value: string) => /^[^@\s]+@bath\.ac\.uk$/i.test(value);
   const showEmailError = email.length > 0 && !isBathEmail(email);
@@ -54,7 +55,8 @@ export default function SignupPage() {
         return;
       }
 
-      router.push('/dashboard');
+      // Email confirmation required — show "check your email" screen
+      setEmailSent(true);
     } catch {
       setError('Something went wrong. Please try again.');
       setIsSubmitting(false);
@@ -77,6 +79,23 @@ export default function SignupPage() {
 
       <div className="relative z-10 w-full max-w-md">
         <div className="border border-gray-200 rounded-[2rem] p-8 bg-white/80 backdrop-blur-xl shadow-xl">
+          {emailSent ? (
+            <div className="text-center space-y-4 py-4">
+              <div className="text-5xl">📬</div>
+              <h1 className="text-2xl font-bold text-gray-900">Check your email</h1>
+              <p className="text-gray-500 text-sm">
+                We sent a confirmation link to <span className="font-medium text-gray-700">{email}</span>.
+                Click the link to activate your account, then come back to sign in.
+              </p>
+              <Link
+                href="/login"
+                className="inline-block mt-4 px-6 py-3 rounded-xl bg-orange-600 text-white font-medium hover:bg-orange-500 transition-colors"
+              >
+                Go to sign in
+              </Link>
+            </div>
+          ) : (
+          <>
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold mb-2 text-gray-900">Get started</h1>
             <p className="text-gray-500">Create an account for your society</p>
@@ -194,6 +213,8 @@ export default function SignupPage() {
               Sign in
             </Link>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

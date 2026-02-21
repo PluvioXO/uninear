@@ -11,7 +11,7 @@ const MOCK_USER = {
   name: 'Maximilian Nicholson',
   email: 'maximilian.nicholson@bath.ac.uk',
   role: 'Student Member',
-  avatar: 'https://ui-avatars.com/api/?name=Maximilian+Nicholson&background=a855f7&color=fff&size=128',
+  avatar: 'https://ui-avatars.com/api/?name=Maximilian+Nicholson&background=ea580c&color=fff&size=128',
   bio: 'Computer Science student at University of Bath. Love hackathons and coffee.',
   location: 'Bath, UK',
   interests: ['Coding', 'Hackathons', 'Coffee', 'Music', 'Tech']
@@ -370,7 +370,7 @@ export default function App() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#a855f7" />
+        <ActivityIndicator size="large" color="#ea580c" />
       </View>
     );
   }
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
   },
   userRole: {
     fontSize: 12,
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     marginTop: 2,
   },
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     borderWidth: 2,
-    borderColor: '#a855f7',
+    borderColor: '#ea580c',
   },
   headerTitle: {
     fontSize: 24,
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   viewToggle: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
     padding: 10,
     borderRadius: 8,
   },
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
   },
   organizer: {
     fontSize: 14,
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     marginBottom: 12,
   },
@@ -718,20 +718,20 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#a855f7',
+    borderColor: '#ea580c',
   },
   calendarButtonText: {
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     fontSize: 12,
   },
   price: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#a855f7',
+    color: '#ea580c',
   },
   rsvpButton: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
@@ -746,7 +746,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   retry: {
-    color: '#a855f7',
+    color: '#ea580c',
     textDecorationLine: 'underline',
   },
   filterButton: {
@@ -799,8 +799,8 @@ const styles = StyleSheet.create({
     borderColor: '#eee',
   },
   optionButtonActive: {
-    backgroundColor: '#a855f7',
-    borderColor: '#a855f7',
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c',
   },
   optionText: {
     color: '#666',
@@ -810,7 +810,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   closeButton: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -878,7 +878,7 @@ const styles = StyleSheet.create({
   },
   tabItemActive: {
     borderTopWidth: 2,
-    borderTopColor: '#a855f7',
+    borderTopColor: '#ea580c',
   },
   tabText: {
     color: '#666',
@@ -886,7 +886,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabTextActive: {
-    color: '#a855f7',
+    color: '#ea580c',
   },
   friendCard: {
     flexDirection: 'row',
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   messageButtonText: {
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     fontSize: 12,
   },
@@ -944,13 +944,13 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     marginBottom: 10,
     borderWidth: 3,
-    borderColor: '#a855f7',
+    borderColor: '#ea580c',
   },
   editAvatarButton: {
     padding: 8,
   },
   editAvatarText: {
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
   },
   profileInfo: {
@@ -972,7 +972,7 @@ const styles = StyleSheet.create({
   },
   profileRole: {
     fontSize: 14,
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     textAlign: 'center',
   profileEmail: {
@@ -1017,7 +1017,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   editProfileButton: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -1075,7 +1075,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   saveButton: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
   },
   saveButtonDisabled: {
     backgroundColor: '#94a3b8',
