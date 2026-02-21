@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, FlatList, ActivityIndicator, SafeAreaView, Platform, Image, TouchableOpacity, Alert, TextInput, Dimensions, Modal, ScrollView } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Calendar from 'expo-calendar';
 
 // API URL — production backend
@@ -51,8 +51,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
+  const [viewMode, setViewMode] = useState('list'); // 'list', 'map', 'filter'
   const [currentTab, setCurrentTab] = useState('events'); // 'events', 'friends', 'profile'
+  const [selectedEvent, setSelectedEvent] = useState(null); // event detail modal
   
   // Profile State
   const [userProfile, setUserProfile] = useState(MOCK_USER);
@@ -60,12 +61,11 @@ export default function App() {
   const [editForm, setEditForm] = useState(MOCK_USER);
 
   // Filter State
-  const [showFilters, setShowFilters] = useState(false);
-  const [radius, setRadius] = useState(null); // 100, 500, 1000 (meters)
-  const [timeRange, setTimeRange] = useState(null); // 'now', '1hr', '2hr', 'today', 'week'
+  const [radius, setRadius] = useState(null);
+  const [timeRange, setTimeRange] = useState(null);
   const [selectedMoods, setSelectedMoods] = useState([]);
-  const [selectedEnergy, setSelectedEnergy] = useState(null); // 'high', 'medium', 'low'
-  const [minRating, setMinRating] = useState(null); // 4.0, 4.5
+  const [selectedEnergy, setSelectedEnergy] = useState(null);
+  const [minRating, setMinRating] = useState(null);
 
   useEffect(() => {
     fetchEvents();
@@ -106,10 +106,16 @@ export default function App() {
   };
 
   const filteredEvents = events.filter(event => {
-    // Search Filter
-    const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.location.toLowerCase().includes(searchQuery.toLowerCase());
-    if (!matchesSearch) return false;
+    // Search Filter — title, location, organizer, description
+    if (searchQuery.trim().length > 0) {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        (event.title       || '').toLowerCase().includes(q) ||
+        (event.location    || '').toLowerCase().includes(q) ||
+        (event.organizer   || '').toLowerCase().includes(q) ||
+        (event.description || '').toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+    }
 
     // Radius Filter
     if (radius && event.latitude && event.longitude) {
@@ -144,6 +150,22 @@ export default function App() {
 
     return true;
   });
+
+  const activeFilterCount = [
+    radius !== null,
+    timeRange !== null,
+    selectedMoods.length > 0,
+    selectedEnergy !== null,
+    minRating !== null,
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setRadius(null);
+    setTimeRange(null);
+    setSelectedMoods([]);
+    setSelectedEnergy(null);
+    setMinRating(null);
+  };
 
   const renderFriendItem = ({ item }) => (
     <View style={styles.friendCard}>
@@ -397,28 +419,103 @@ export default function App() {
         </View>
         
         <View style={styles.controls}>
-          <TextInput
-            style={styles.searchBar}
-            placeholder="Search events..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          <TouchableOpacity 
-            style={styles.filterButton}
-            onPress={() => setShowFilters(true)}
-          >
-            <Text style={styles.filterButtonText}>Filters</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.viewToggle}
-            onPress={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
-          >
-            <Text style={styles.viewToggleText}>
-              {viewMode === 'list' ? 'Map' : 'List'}
+          <View style={styles.searchContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchBar}
+              placeholder="Search by name, location, organiser..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                // Auto-switch to list when user starts typing
+                if (text.length > 0 && viewMode !== 'list') setViewMode('list');
+              }}
+              returnKeyType="search"
+              clearButtonMode="never"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.searchClearButton}>
+                <Text style={styles.searchClearText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {searchQuery.trim().length > 0 && (
+            <Text style={styles.searchResultCount}>
+              {filteredEvents.length} result{filteredEvents.length !== 1 ? 's' : ''} for &quot;{searchQuery}&quot;
             </Text>
-          </TouchableOpacity>
+          )}
+        </View>
+
+        {/* View mode segmented control */}
+        <View style={styles.segmentedControl}>
+          {[
+            { key: 'list', label: '☰  List' },
+            { key: 'map',  label: '🗺  Map'  },
+            { key: 'filter', label: `⚙  Filter${activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}` },
+          ].map(({ key, label }) => (
+            <TouchableOpacity
+              key={key}
+              style={[styles.segmentButton, viewMode === key && styles.segmentButtonActive]}
+              onPress={() => setViewMode(key)}
+            >
+              <Text style={[styles.segmentText, viewMode === key && styles.segmentTextActive]}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
+
+      {/* Event detail modal — opened from map callout */}
+      <Modal
+        visible={selectedEvent !== null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedEvent(null)}
+      >
+        {selectedEvent && (
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <ScrollView>
+                <Text style={styles.modalTitle}>{selectedEvent.title}</Text>
+                <Text style={styles.modalDate}>
+                  {new Date(selectedEvent.start_time || selectedEvent.date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+                  {' · '}
+                  {new Date(selectedEvent.start_time || selectedEvent.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                <Text style={styles.modalLocation}>📍 {selectedEvent.location}</Text>
+                {selectedEvent.organizer && (
+                  <Text style={styles.modalOrganizer}>Hosted by {selectedEvent.organizer}</Text>
+                )}
+                {selectedEvent.description && (
+                  <Text style={styles.modalDescription}>{selectedEvent.description}</Text>
+                )}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={() => { handleRSVP(selectedEvent.title); setSelectedEvent(null); }}
+                  >
+                    <Text style={styles.closeButtonText}>RSVP</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.modalSecondaryButton}
+                    onPress={() => { addToCalendar(selectedEvent); setSelectedEvent(null); }}
+                  >
+                    <Text style={styles.modalSecondaryButtonText}>Add to Calendar</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.modalCloseX}
+                onPress={() => setSelectedEvent(null)}
+              >
+                <Text style={styles.modalCloseXText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </Modal>
 
       <Modal
         visible={showFilters}
@@ -519,15 +616,27 @@ export default function App() {
 
       {currentTab === 'events' ? (
         viewMode === 'list' ? (
-          <FlatList
-            data={filteredEvents}
-            renderItem={renderEventItem}
-            keyExtractor={item => item.id.toString()}
-            contentContainerStyle={styles.list}
-            refreshing={loading}
-            onRefresh={fetchEvents}
-          />
-        ) : (
+          filteredEvents.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>🔍</Text>
+              <Text style={styles.emptyStateText}>No events match your search{activeFilterCount > 0 ? ' or filters' : ''}.</Text>
+              {activeFilterCount > 0 && (
+                <TouchableOpacity onPress={resetFilters}>
+                  <Text style={styles.clearFiltersText}>Clear filters</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <FlatList
+              data={filteredEvents}
+              renderItem={renderEventItem}
+              keyExtractor={item => item.id.toString()}
+              contentContainerStyle={styles.list}
+              refreshing={loading}
+              onRefresh={fetchEvents}
+            />
+          )
+        ) : viewMode === 'map' ? (
           <View style={styles.mapContainer}>
             <MapView
               provider={PROVIDER_GOOGLE}
@@ -535,25 +644,144 @@ export default function App() {
               initialRegion={{
                 latitude: 51.3758,
                 longitude: -2.3599,
-                latitudeDelta: 0.0922,
-                longitudeDelta: 0.0421,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
               }}
             >
-              {filteredEvents.map(event => (
+              {/* User location marker */}
+              <Marker
+                coordinate={USER_LOCATION}
+                title="You are here"
+                pinColor="#3b82f6"
+              />
+              {filteredEvents.map(event =>
                 event.latitude && event.longitude ? (
                   <Marker
                     key={event.id}
-                    coordinate={{
-                      latitude: event.latitude,
-                      longitude: event.longitude,
-                    }}
-                    title={event.title}
-                    description={event.location}
-                  />
+                    coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+                    pinColor="#ea580c"
+                  >
+                    <Callout tooltip onPress={() => setSelectedEvent(event)}>
+                      <View style={styles.callout}>
+                        <Text style={styles.calloutTitle} numberOfLines={2}>{event.title}</Text>
+                        <Text style={styles.calloutDate}>
+                          {new Date(event.start_time || event.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          {' · '}
+                          {new Date(event.start_time || event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                        <Text style={styles.calloutLocation} numberOfLines={1}>📍 {event.location}</Text>
+                        <Text style={styles.calloutTap}>Tap for details →</Text>
+                      </View>
+                    </Callout>
+                  </Marker>
                 ) : null
-              ))}
+              )}
             </MapView>
+            {/* Events without coords — shown as a bottom sheet count */}
+            {filteredEvents.filter(e => !e.latitude || !e.longitude).length > 0 && (
+              <View style={styles.mapFootnote}>
+                <Text style={styles.mapFootnoteText}>
+                  {filteredEvents.filter(e => !e.latitude || !e.longitude).length} event(s) have no map location — switch to List view to see them all.
+                </Text>
+              </View>
+            )}
           </View>
+        ) : (
+          /* Filter panel — inline, no modal */
+          <ScrollView contentContainerStyle={styles.filterPanel}>
+            <View style={styles.filterPanelHeader}>
+              <Text style={styles.modalTitle}>Filter Events</Text>
+              {activeFilterCount > 0 && (
+                <TouchableOpacity onPress={resetFilters}>
+                  <Text style={styles.clearFiltersText}>Reset all</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Distance from you</Text>
+              <View style={styles.filterOptions}>
+                {[{ label: '100 m', val: 100 }, { label: '500 m', val: 500 }, { label: '1 km', val: 1000 }].map(({ label, val }) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.optionButton, radius === val && styles.optionButtonActive]}
+                    onPress={() => setRadius(radius === val ? null : val)}
+                  >
+                    <Text style={[styles.optionText, radius === val && styles.optionTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>When</Text>
+              <View style={styles.filterOptions}>
+                {[{ label: 'Happening now', val: 'now' }, { label: 'Next 1 hr', val: '1hr' }, { label: 'Next 2 hrs', val: '2hr' }, { label: 'Today', val: 'today' }, { label: 'This week', val: 'week' }].map(({ label, val }) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.optionButton, timeRange === val && styles.optionButtonActive]}
+                    onPress={() => setTimeRange(timeRange === val ? null : val)}
+                  >
+                    <Text style={[styles.optionText, timeRange === val && styles.optionTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Mood</Text>
+              <View style={styles.filterOptions}>
+                {['Energetic', 'Relaxed', 'Social', 'Focused'].map(m => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.optionButton, selectedMoods.includes(m.toLowerCase()) && styles.optionButtonActive]}
+                    onPress={() => toggleMood(m.toLowerCase())}
+                  >
+                    <Text style={[styles.optionText, selectedMoods.includes(m.toLowerCase()) && styles.optionTextActive]}>{m}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Energy level</Text>
+              <View style={styles.filterOptions}>
+                {['High', 'Medium', 'Low'].map(e => (
+                  <TouchableOpacity
+                    key={e}
+                    style={[styles.optionButton, selectedEnergy === e.toLowerCase() && styles.optionButtonActive]}
+                    onPress={() => setSelectedEnergy(selectedEnergy === e.toLowerCase() ? null : e.toLowerCase())}
+                  >
+                    <Text style={[styles.optionText, selectedEnergy === e.toLowerCase() && styles.optionTextActive]}>{e}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Min rating</Text>
+              <View style={styles.filterOptions}>
+                {[{ label: '4.0+', val: 4.0 }, { label: '4.5+', val: 4.5 }].map(({ label, val }) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.optionButton, minRating === val && styles.optionButtonActive]}
+                    onPress={() => setMinRating(minRating === val ? null : val)}
+                  >
+                    <Text style={[styles.optionText, minRating === val && styles.optionTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setViewMode('list')}
+            >
+              <Text style={styles.closeButtonText}>
+                Show {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         )
       ) : currentTab === 'friends' ? (
         <FlatList
@@ -642,16 +870,42 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   controls: {
+    flexDirection: 'column',
+    gap: 6,
+  },
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    paddingHorizontal: 10,
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: 6,
+    color: '#999',
   },
   searchBar: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 10,
-    borderRadius: 8,
-    fontSize: 16,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#1a1a1a',
+  },
+  searchClearButton: {
+    padding: 4,
+  },
+  searchClearText: {
+    fontSize: 14,
+    color: '#999',
+    fontWeight: '600',
+  },
+  searchResultCount: {
+    fontSize: 12,
+    color: '#ea580c',
+    fontWeight: '600',
+    paddingHorizontal: 2,
   },
   viewToggle: {
     backgroundColor: '#ea580c',
@@ -748,15 +1002,6 @@ const styles = StyleSheet.create({
   retry: {
     color: '#ea580c',
     textDecorationLine: 'underline',
-  },
-  filterButton: {
-    backgroundColor: '#f0f0f0',
-    padding: 10,
-    borderRadius: 8,
-  },
-  filterButtonText: {
-    color: '#333',
-    fontWeight: '600',
   },
   modalContainer: {
     flex: 1,
@@ -975,11 +1220,12 @@ const styles = StyleSheet.create({
     color: '#ea580c',
     fontWeight: '600',
     textAlign: 'center',
+    marginBottom: 4,
+  },
   profileEmail: {
     fontSize: 14,
     color: '#888',
-    marginBottom: 20
-  },
+    textAlign: 'center',
     marginBottom: 20,
   },
   infoSection: {
@@ -1087,5 +1333,171 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: '#fff',
+  },
+  // ── Segmented control ──────────────────────────────────────────────────────
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+    marginTop: 12,
+    padding: 3,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  segmentButtonActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#888',
+  },
+  segmentTextActive: {
+    color: '#ea580c',
+  },
+  // ── Map callout ────────────────────────────────────────────────────────────
+  callout: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    width: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  calloutTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  calloutDate: {
+    fontSize: 12,
+    color: '#ea580c',
+    marginBottom: 2,
+  },
+  calloutLocation: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 6,
+  },
+  calloutTap: {
+    fontSize: 11,
+    color: '#ea580c',
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  // ── Map footnote ───────────────────────────────────────────────────────────
+  mapFootnote: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  mapFootnoteText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  // ── Empty state ────────────────────────────────────────────────────────────
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  clearFiltersText: {
+    color: '#ea580c',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  // ── Inline filter panel ────────────────────────────────────────────────────
+  filterPanel: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  filterPanelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  // ── Event detail modal ─────────────────────────────────────────────────────
+  modalDate: {
+    fontSize: 14,
+    color: '#ea580c',
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  modalLocation: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
+  },
+  modalOrganizer: {
+    fontSize: 14,
+    color: '#ea580c',
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: '#444',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  modalActions: {
+    gap: 10,
+    marginTop: 8,
+  },
+  modalSecondaryButton: {
+    borderWidth: 1.5,
+    borderColor: '#ea580c',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalSecondaryButtonText: {
+    color: '#ea580c',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  modalCloseX: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseXText: {
+    fontSize: 18,
+    color: '#666',
   },
 });
