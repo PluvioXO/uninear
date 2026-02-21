@@ -309,18 +309,23 @@ def test_FR14_get_event_rsvps():
     mock_user.user.email = "alice@bath.ac.uk"
     mock_user.user.user_metadata = {"full_name": "Alice Smith"}
 
-    with patch_auth_valid():
-        with patch.object(backend.db.admin, 'table', return_value=attendance_table):
-            with patch.object(backend.db.admin.auth.admin, 'get_user_by_id', return_value=mock_user) as mock_get:
-                response = client.get("/api/events/1/rsvps", headers=AUTH_HEADER)
+    # Build a full mock admin client so the test works regardless of whether
+    # SERVICE_ROLE_KEY is set (db.admin may be None in CI).
+    mock_admin = MagicMock()
+    mock_admin.table.return_value = attendance_table
+    mock_admin.auth.admin.get_user_by_id.return_value = mock_user
 
-                assert response.status_code == 200
-                body = response.json()
-                assert len(body) == 1
-                assert body[0]["name"] == "Alice Smith"
-                assert body[0]["email"] == "alice@bath.ac.uk"
-                assert body[0]["rsvp_time"] == "2025-02-01T10:00:00"
-                mock_get.assert_called_once_with("uid-abc")
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
+            response = client.get("/api/events/1/rsvps", headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+            body = response.json()
+            assert len(body) == 1
+            assert body[0]["name"] == "Alice Smith"
+            assert body[0]["email"] == "alice@bath.ac.uk"
+            assert body[0]["rsvp_time"] == "2025-02-01T10:00:00"
+            mock_admin.auth.admin.get_user_by_id.assert_called_once_with("uid-abc")
 
 # 9. Test Signup
 def test_signup():

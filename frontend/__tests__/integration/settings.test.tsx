@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import SettingsPage from '../../app/dashboard/settings/page'
+import { logout } from '../../lib/auth'
 
 // Mock MagneticButton
 jest.mock('../../components/MagneticButton', () => {
@@ -43,9 +44,9 @@ describe('Settings Page', () => {
   })
 
   it('calls logout when Sign Out is clicked', () => {
-    const { logout } = require('../../lib/auth')
+    const mockedLogout = logout as jest.MockedFunction<typeof logout>
     render(<SettingsPage />)
     fireEvent.click(screen.getByText('Sign Out'))
-    expect(logout).toHaveBeenCalled()
+    expect(mockedLogout).toHaveBeenCalled()
   })
 })

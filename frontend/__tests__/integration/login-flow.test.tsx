@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import LoginPage from '../../app/login/page'
 import { login } from '../../lib/auth'
+import type { AuthTokenResponsePassword } from '@supabase/supabase-js'
 
 const mockPush = jest.fn()
 
@@ -32,7 +33,7 @@ describe('test_NFR08_user_login - Login Flow', () => {
   })
 
   it('AC1: successful login redirects to /dashboard', async () => {
-    mockedLogin.mockResolvedValue({ data: { session: { access_token: 'fake-jwt' } }, error: null } as any)
+    mockedLogin.mockResolvedValue({ data: { session: { access_token: 'fake-jwt' } }, error: null } as unknown as AuthTokenResponsePassword)
 
     render(<LoginPage />)
 
@@ -47,7 +48,7 @@ describe('test_NFR08_user_login - Login Flow', () => {
   })
 
   it('AC2: failed login shows "Invalid email or password" error', async () => {
-    mockedLogin.mockResolvedValue({ data: { session: null }, error: { message: 'Invalid login credentials' } } as any)
+    mockedLogin.mockResolvedValue({ data: { session: null }, error: { message: 'Invalid login credentials' } } as unknown as AuthTokenResponsePassword)
 
     render(<LoginPage />)
 
@@ -62,7 +63,7 @@ describe('test_NFR08_user_login - Login Flow', () => {
   })
 
   it('AC1: JWT is stored via Supabase session (login() called with credentials)', async () => {
-    mockedLogin.mockResolvedValue({ data: { session: { access_token: 'jwt-abc123' } }, error: null } as any)
+    mockedLogin.mockResolvedValue({ data: { session: { access_token: 'jwt-abc123' } }, error: null } as unknown as AuthTokenResponsePassword)
 
     render(<LoginPage />)
 
@@ -76,7 +77,7 @@ describe('test_NFR08_user_login - Login Flow', () => {
   })
 
   it('AC2: shows loading state during submission', async () => {
-    let resolveLogin: (value: any) => void
+    let resolveLogin: (value: AuthTokenResponsePassword) => void
     mockedLogin.mockImplementation(() => new Promise((resolve) => { resolveLogin = resolve }))
 
     render(<LoginPage />)
@@ -91,7 +92,7 @@ describe('test_NFR08_user_login - Login Flow', () => {
     })
 
     // Resolve to clean up
-    resolveLogin!({ data: { session: { access_token: 'token' } }, error: null })
+    resolveLogin!({ data: { session: { access_token: 'token' } }, error: null } as unknown as AuthTokenResponsePassword)
   })
 
   it('AC2: submit button is disabled without email and password', () => {
