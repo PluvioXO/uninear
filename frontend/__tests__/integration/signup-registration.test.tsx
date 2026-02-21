@@ -68,7 +68,7 @@ describe('test_NFR08_user_registration - Signup Page', () => {
     })
   })
 
-  it('AC1: redirects to /dashboard on successful signup', async () => {
+  it('AC1: shows email confirmation screen on successful signup', async () => {
     mockSignup.mockResolvedValue({
       data: { user: { id: 'u1', identities: [{ id: 'i1' }] } as unknown as AuthResponse['data']['user'], session: null },
       error: null,
@@ -77,8 +77,10 @@ describe('test_NFR08_user_registration - Signup Page', () => {
     fillFormAndSubmit()
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/dashboard')
+      expect(screen.getByText('Check your email')).toBeInTheDocument()
+      expect(screen.getByText(/We sent a confirmation link to/i)).toBeInTheDocument()
     })
+    expect(mockPush).not.toHaveBeenCalled()
   })
 
   it('AC2: shows duplicate email error from Supabase error response', async () => {
