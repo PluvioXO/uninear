@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
+import { logout } from '@/lib/auth';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
