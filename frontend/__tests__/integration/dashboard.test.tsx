@@ -81,6 +81,11 @@ describe('FR-01: Event List Display', () => {
       expect(screen.getByText('Industry Panel Night')).toBeInTheDocument()
     })
 
+    // Verify DOM order: earlier event appears first
+    const hackathon = screen.getByText('Annual Tech Hackathon')
+    const panel = screen.getByText('Industry Panel Night')
+    expect(hackathon.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
     expect(mockFetchEvents).toHaveBeenCalledTimes(1)
   })
 

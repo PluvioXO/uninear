@@ -102,68 +102,29 @@ class UniNearBackend:
             )
             return cast(list[Dict[str, Any]], response.data or [])
         except Exception as e:
-            print(f"Database error: {e}. Returning mock data.")
+            import logging
+            logging.error(f"Database error fetching events: {e}. Returning mock data.")
             return [
                 {
                     "id": 1,
                     "title": "Annual Tech Hackathon (Mock)",
-                    "date": "2025-10-15T09:00:00",
+                    "start_time": "2025-10-15T09:00:00",
                     "location": "Engineering Hub",
                     "capacity": 200,
+                    "attendee_count": 142,
                     "status": "Published",
-                    "latitude": 51.3758,
-                    "longitude": -2.3599,
-                    "moods": ["focused", "energetic"],
-                    "energy_level": "high",
-                    "friends_attending": ["Alice", "Bob", "Charlie"],
-                    "rating": 4.8,
                     "organizer": "Tech Society"
                 },
                 {
                     "id": 2,
                     "title": "Industry Panel Night (Mock)",
-                    "date": "2025-10-22T18:30:00",
+                    "start_time": "2025-10-22T18:30:00",
                     "location": "Main Auditorium",
                     "capacity": 150,
-                    "status": "Draft",
-                    "latitude": 51.3800,
-                    "longitude": -2.3600,
-                    "moods": ["social", "relaxed"],
-                    "energy_level": "medium",
-                    "friends_attending": [],
-                    "rating": 4.2,
+                    "attendee_count": 89,
+                    "status": "Published",
                     "organizer": "Business School"
                 },
-                {
-                    "id": 3,
-                    "title": "Yoga & Mindfulness",
-                    "date": "2025-10-16T08:00:00",
-                    "location": "Student Center",
-                    "capacity": 30,
-                    "status": "Published",
-                    "latitude": 51.3700,
-                    "longitude": -2.3550,
-                    "moods": ["relaxed", "focused"],
-                    "energy_level": "low",
-                    "friends_attending": ["Alice"],
-                    "rating": 4.9,
-                    "organizer": "Wellness Club"
-                },
-                {
-                    "id": 4,
-                    "title": "Friday Night Social",
-                    "date": "2025-10-17T20:00:00",
-                    "location": "Student Bar",
-                    "capacity": 100,
-                    "status": "Published",
-                    "latitude": 51.3750,
-                    "longitude": -2.3650,
-                    "moods": ["social", "energetic"],
-                    "energy_level": "high",
-                    "friends_attending": ["Bob", "David", "Eve"],
-                    "rating": 4.5,
-                    "organizer": "Student Union"
-                }
             ]
 
     def create_event(self, event: EventCreateSchema):
