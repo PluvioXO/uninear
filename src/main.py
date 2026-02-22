@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import FastAPI, HTTPException, Response, Query, Depends, Request
 from fastapi.responses import JSONResponse
 from typing import Any, Dict, cast
@@ -88,7 +90,16 @@ class UniNearBackend:
 
     def get_events(self) -> list[Dict[str, Any]]:
         try:
-            response = self.db.client.table("events").select("*").execute()
+            now = datetime.now(timezone.utc).isoformat()
+            response = (
+                self.db.client
+                .table("events")
+                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, latitude, longitude")
+                .eq("status", "Published")
+                .gte("start_time", now)
+                .order("start_time")
+                .execute()
+            )
             return cast(list[Dict[str, Any]], response.data or [])
         except Exception as e:
             print(f"Database error: {e}. Returning mock data.")

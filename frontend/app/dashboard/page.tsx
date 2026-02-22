@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
+import { fetchEvents, type EventResponse } from '@/lib/api';
 
 // Types for our local data
 interface Event {
@@ -177,20 +178,50 @@ const INITIAL_EVENTS: Event[] = [
   }
 ];
 
+/** Map API response to local Event shape */
+function toEvent(e: EventResponse): Event {
+  return {
+    id: e.id,
+    title: e.title,
+    date: e.start_time,
+    location: e.location,
+    attendees: e.attendee_count,
+    capacity: e.capacity,
+    status: (e.status as Event['status']) || 'Published',
+  };
+}
+
 export default function DashboardPage() {
-  const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  const loadEvents = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchEvents();
+      setEvents(data.map(toEvent));
+    } catch {
+      setError('Failed to load events. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadEvents(); }, []);
 
   // Derived state for statistics
   const totalMembers = 1248; // Static for now
   const activeEventsCount = events.filter(e => e.status !== 'Past').length;
   const totalAttendees = events.reduce((acc, curr) => acc + curr.attendees, 0);
-  const avgAttendance = Math.round(
-    events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100
-  );
+  const avgAttendance = events.length > 0
+    ? Math.round(events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100)
+    : 0;
 
-  const filteredEvents = events.filter(e => 
+  const filteredEvents = events.filter(e =>
     showPastEvents ? e.status === 'Past' : e.status !== 'Past'
   );
 
@@ -413,9 +444,29 @@ export default function DashboardPage() {
             </div>
             
             <div className="space-y-4">
-              {filteredEvents.length === 0 ? (
+              {loading ? (
+                <div className="space-y-4" data-testid="loading-skeleton">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm animate-pulse">
+                      <div className="h-5 bg-gray-200 rounded w-2/3 mb-3" />
+                      <div className="h-4 bg-gray-100 rounded w-1/2 mb-3" />
+                      <div className="h-3 bg-gray-100 rounded w-1/4" />
+                    </div>
+                  ))}
+                </div>
+              ) : error ? (
                 <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
-                  <p className="text-gray-500">No events found.</p>
+                  <p className="text-red-600 mb-4">{error}</p>
+                  <button
+                    onClick={loadEvents}
+                    className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-500 transition-colors"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : filteredEvents.length === 0 ? (
+                <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
+                  <p className="text-gray-500">No upcoming events</p>
                 </div>
               ) : filteredEvents.map((event) => (
                 <div key={event.id} className="group border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md hover:border-orange-200 transition-all cursor-pointer">
