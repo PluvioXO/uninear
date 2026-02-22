@@ -31,6 +31,13 @@ const MOCK_FRIENDS = [
   { id: 5, name: 'Eve Davis', status: 'Available', avatar: 'https://ui-avatars.com/api/?name=Eve+Davis&background=9bf6ff&color=fff' },
 ];
 
+// Seed societies — these also get created dynamically from event organisers
+const SEED_SOCIETIES = [
+  { id: 'bath-cs', name: 'Bath CS Society', description: 'Computing events, hackathons & talks.', avatar: 'https://ui-avatars.com/api/?name=CS+Society&background=ea580c&color=fff' },
+  { id: 'bath-tech', name: 'Bath Tech Hub', description: 'Industry connections and workshops.', avatar: 'https://ui-avatars.com/api/?name=Tech+Hub&background=3b82f6&color=fff' },
+  { id: 'bath-ents', name: 'Bath Ents', description: 'Social events and nights out.', avatar: 'https://ui-avatars.com/api/?name=Bath+Ents&background=f59e0b&color=fff' },
+];
+
 const getDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371e3; // metres
   const φ1 = lat1 * Math.PI/180; // φ, λ in radians
@@ -59,6 +66,10 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(MOCK_USER);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState(MOCK_USER);
+  const [profileTab, setProfileTab] = useState('info'); // 'info' | 'following'
+
+  // Following State — set of society/organiser IDs
+  const [followedIds, setFollowedIds] = useState(new Set(['bath-cs']));
 
   // Filter State
   const [radius, setRadius] = useState(null);
@@ -167,6 +178,39 @@ export default function App() {
     setMinRating(null);
   };
 
+  // Build a deduplicated society list from seed + live event organisers
+  const allSocieties = (() => {
+    const map = new Map(SEED_SOCIETIES.map(s => [s.id, s]));
+    events.forEach(e => {
+      if (e.organizer) {
+        const id = e.organizer.toLowerCase().replace(/\s+/g, '-');
+        if (!map.has(id)) {
+          map.set(id, {
+            id,
+            name: e.organizer,
+            description: 'Society on Uninear.',
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.organizer)}&background=ea580c&color=fff`,
+          });
+        }
+      }
+    });
+    return Array.from(map.values());
+  })();
+
+  const toggleFollow = (societyId) => {
+    setFollowedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(societyId)) {
+        next.delete(societyId);
+      } else {
+        next.add(societyId);
+      }
+      return next;
+    });
+  };
+
+  const followedSocieties = allSocieties.filter(s => followedIds.has(s.id));
+
   const renderFriendItem = ({ item }) => (
     <View style={styles.friendCard}>
       <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
@@ -204,7 +248,78 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {isEditingProfile ? (
+      {/* Stats row */}
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{events.length}</Text>
+          <Text style={styles.statLabel}>Events</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <TouchableOpacity style={styles.statItem} onPress={() => setProfileTab('following')}>
+          <Text style={styles.statNumber}>{followedIds.size}</Text>
+          <Text style={styles.statLabel}>Following</Text>
+        </TouchableOpacity>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{MOCK_FRIENDS.length}</Text>
+          <Text style={styles.statLabel}>Friends</Text>
+        </View>
+      </View>
+
+      {/* Profile sub-tabs */}
+      <View style={styles.profileTabs}>
+        {['info', 'following'].map(tab => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.profileTabBtn, profileTab === tab && styles.profileTabBtnActive]}
+            onPress={() => setProfileTab(tab)}
+          >
+            <Text style={[styles.profileTabText, profileTab === tab && styles.profileTabTextActive]}>
+              {tab === 'info' ? 'Profile' : `Following (${followedIds.size})`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {profileTab === 'following' ? (
+        /* ── Following list ── */
+        followedSocieties.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>🏛️</Text>
+            <Text style={styles.emptyStateText}>You're not following any societies yet.</Text>
+            <Text style={styles.emptyStateSubText}>Tap "+ Follow" on any event card to follow that society.</Text>
+          </View>
+        ) : (
+          <View>
+            {followedSocieties.map(society => {
+              const upcomingCount = events.filter(e =>
+                e.organizer &&
+                e.organizer.toLowerCase().replace(/\s+/g, '-') === society.id
+              ).length;
+              return (
+                <View key={society.id} style={styles.societyCard}>
+                  <Image source={{ uri: society.avatar }} style={styles.societyAvatar} />
+                  <View style={styles.societyInfo}>
+                    <Text style={styles.societyName}>{society.name}</Text>
+                    <Text style={styles.societyDesc} numberOfLines={1}>{society.description}</Text>
+                    {upcomingCount > 0 && (
+                      <Text style={styles.societyEvents}>{upcomingCount} event{upcomingCount !== 1 ? 's' : ''}</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.unfollowButton}
+                    onPress={() => toggleFollow(society.id)}
+                  >
+                    <Text style={styles.unfollowButtonText}>Unfollow</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        )
+      ) : (
+        /* ── Profile info / edit ── */
+        isEditingProfile ? (
         <View style={styles.editForm}>
           <Text style={styles.label}>Name</Text>
           <TextInput
@@ -303,6 +418,7 @@ export default function App() {
             <Text style={styles.editProfileButtonText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
+      )
       )}
     </ScrollView>
   );
@@ -338,7 +454,11 @@ export default function App() {
     }
   };
 
-  const renderEventItem = ({ item }) => (
+  const renderEventItem = ({ item }) => {
+    const societyId = item.organizer ? item.organizer.toLowerCase().replace(/\s+/g, '-') : null;
+    const isFollowing = societyId ? followedIds.has(societyId) : false;
+
+    return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.title}>{item.title}</Text>
@@ -351,7 +471,22 @@ export default function App() {
       
       <Text style={styles.date}>{new Date(item.start_time || item.date).toLocaleDateString()} • {new Date(item.start_time || item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
       <Text style={styles.location}>{item.location}</Text>
-      {item.organizer && <Text style={styles.organizer}>Hosted by {item.organizer}</Text>}
+
+      {item.organizer && (
+        <View style={styles.organizerRow}>
+          <Text style={styles.organizer}>Hosted by {item.organizer}</Text>
+          {societyId && (
+            <TouchableOpacity
+              style={[styles.followChip, isFollowing && styles.followChipActive]}
+              onPress={() => toggleFollow(societyId)}
+            >
+              <Text style={[styles.followChipText, isFollowing && styles.followChipTextActive]}>
+                {isFollowing ? '✓ Following' : '+ Follow'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
       
       <View style={styles.tagsContainer}>
         {item.energy_level && (
@@ -388,6 +523,7 @@ export default function App() {
       </View>
     </View>
   );
+  };
 
   if (loading) {
     return (
@@ -1499,5 +1635,152 @@ const styles = StyleSheet.create({
   modalCloseXText: {
     fontSize: 18,
     color: '#666',
+  },
+  // ── Follow chip on event card ──────────────────────────────────────────────
+  organizerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  followChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#ea580c',
+  },
+  followChipActive: {
+    backgroundColor: '#ea580c',
+  },
+  followChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ea580c',
+  },
+  followChipTextActive: {
+    color: '#fff',
+  },
+  // ── Profile stats row ──────────────────────────────────────────────────────
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statNumber: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#eee',
+  },
+  // ── Profile sub-tabs ───────────────────────────────────────────────────────
+  profileTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 16,
+  },
+  profileTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  profileTabBtnActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  profileTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#888',
+  },
+  profileTabTextActive: {
+    color: '#ea580c',
+  },
+  // ── Society card (following list) ─────────────────────────────────────────
+  societyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  societyAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    marginRight: 12,
+  },
+  societyInfo: {
+    flex: 1,
+  },
+  societyName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+  },
+  societyDesc: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  societyEvents: {
+    fontSize: 12,
+    color: '#ea580c',
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  unfollowButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#ccc',
+  },
+  unfollowButtonText: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '600',
+  },
+  emptyStateSubText: {
+    fontSize: 13,
+    color: '#aaa',
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 20,
   },
 });
