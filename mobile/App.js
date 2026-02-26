@@ -4,9 +4,8 @@ import { StyleSheet, Text, View, FlatList, ActivityIndicator, SafeAreaView, Plat
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Calendar from 'expo-calendar';
 
-// API URL - Use 10.0.2.2 for Android Emulator, localhost for iOS Simulator
-// For physical devices, you must use your computer's LAN IP address (e.g., http://192.168.1.x:8000/events)
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:8000/events' : 'http://127.0.0.1:8000/events';
+// API URL - Use your computer's LAN IP for physical devices, 10.0.2.2 for Android Emulator, localhost for iOS Simulator
+const API_URL = 'http://172.26.102.102:8000/events';
 
 const MOCK_USER = {
   name: 'Maximilian Nicholson',
