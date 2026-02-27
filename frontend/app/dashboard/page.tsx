@@ -9,6 +9,7 @@ import { fetchEvents, type EventResponse } from '@/lib/api';
 interface Event {
   id: number;
   title: string;
+  description?: string;
   date: string;
   location: string;
   attendees: number;
@@ -24,11 +25,14 @@ function toEvent(e: EventResponse): Event {
   return {
     id: e.id,
     title: e.title,
+    description: e.description,
     date: e.start_time,
     location: e.location,
     attendees: e.attendee_count,
     capacity: e.capacity,
-    status: (e.status as Event['status']) || 'Published',
+    status: (['Published', 'Draft', 'Scheduled', 'Past'].includes(e.status)
+      ? e.status as Event['status']
+      : 'Published'),
   };
 }
 
@@ -45,7 +49,7 @@ export default function DashboardPage() {
       const data = await fetchEvents();
       setEvents(data.map(toEvent));
     } catch {
-      setError('Failed to load events. Please try again.');
+      setError('Unable to load events. Please try again.');
     } finally {
       setLoading(false);
     }

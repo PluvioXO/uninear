@@ -27,6 +27,7 @@ const MOCK_EVENTS = [
   {
     id: 1,
     title: 'Annual Tech Hackathon',
+    description: 'Build something amazing in 24 hours',
     start_time: '2026-10-15T09:00:00',
     location: 'Engineering Hub',
     capacity: 200,
@@ -36,6 +37,7 @@ const MOCK_EVENTS = [
   {
     id: 2,
     title: 'Industry Panel Night',
+    description: 'Hear from leading tech professionals',
     start_time: '2026-10-22T18:30:00',
     location: 'Main Auditorium',
     capacity: 150,
@@ -114,7 +116,7 @@ describe('FR-01: Event List Display', () => {
     render(<DashboardPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to load events. Please try again.')).toBeInTheDocument()
+      expect(screen.getByText('Unable to load events. Please try again.')).toBeInTheDocument()
     })
     expect(screen.getByText('Retry')).toBeInTheDocument()
   })
@@ -149,5 +151,74 @@ describe('FR-01: Event List Display', () => {
     expect(screen.getByText(/142 \/ 200 registered/)).toBeInTheDocument()
     // Check location is shown (part of the date/time/location line)
     expect(screen.getByText(/Engineering Hub/)).toBeInTheDocument()
+  })
+})
+
+// --- NFR-14: Event API Integration Tests ---
+
+describe('NFR-14: Event API Integration', () => {
+  it('test_NFR14_events_api_integration: renders all required API fields in event cards', async () => {
+    const eventsWithAllFields = [
+      {
+        id: 10,
+        title: 'Campus Meetup',
+        description: 'A social gathering',
+        start_time: '2026-06-01T14:00:00Z',
+        location: 'Student Union',
+        capacity: 100,
+        attendee_count: 25,
+        status: 'Published',
+        organizer: 'CS Society',
+      },
+    ]
+    mockFetchEvents.mockResolvedValue(eventsWithAllFields)
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      // AC-1: title rendered
+      expect(screen.getByText('Campus Meetup')).toBeInTheDocument()
+    })
+
+    // AC-1: location rendered (in date/time/location line)
+    expect(screen.getByText(/Student Union/)).toBeInTheDocument()
+    // AC-1: attendee count / capacity rendered
+    expect(screen.getByText(/25 \/ 100 registered/)).toBeInTheDocument()
+    // AC-1: status badge rendered
+    expect(screen.getByText('Published')).toBeInTheDocument()
+  })
+
+  it('test_NFR14_events_api_integration: error state shows correct message and retry', async () => {
+    mockFetchEvents.mockRejectedValue(new Error('Server error'))
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      // AC-2: correct error message
+      expect(screen.getByText('Unable to load events. Please try again.')).toBeInTheDocument()
+    })
+
+    // AC-2: retry button present
+    const retryButton = screen.getByText('Retry')
+    expect(retryButton).toBeInTheDocument()
+
+    // AC-2: retry re-calls fetchEvents
+    mockFetchEvents.mockResolvedValueOnce([
+      {
+        id: 1,
+        title: 'Recovered Event',
+        start_time: '2026-06-01T10:00:00Z',
+        location: 'Hall',
+        capacity: 50,
+        attendee_count: 10,
+        status: 'Published',
+      },
+    ])
+
+    fireEvent.click(retryButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Recovered Event')).toBeInTheDocument()
+    })
   })
 })

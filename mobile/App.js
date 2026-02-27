@@ -4,8 +4,13 @@ import { StyleSheet, Text, View, FlatList, ActivityIndicator, SafeAreaView, Plat
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Calendar from 'expo-calendar';
 
-// API URL - Use your computer's LAN IP for physical devices, 10.0.2.2 for Android Emulator, localhost for iOS Simulator
-const API_URL = 'http://172.26.102.102:8000/events';
+// API base URL — uses platform-appropriate default for local dev.
+// Android emulator: 10.0.2.2 maps to host loopback; iOS simulator/web: localhost works directly.
+const API_BASE = Platform.select({
+  android: 'http://10.0.2.2:8000',
+  default: 'http://localhost:8000',
+});
+const API_URL = `${API_BASE}/events`;
 
 const MOCK_USER = {
   name: 'Maximilian Nicholson',
@@ -87,7 +92,7 @@ export default function App() {
       setError(null);
     } catch (err) {
       console.error('Fetch error:', err);
-      setError(err.message);
+      setError('Unable to load events. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -378,7 +383,7 @@ export default function App() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text style={styles.error}>Error: {error}</Text>
+        <Text style={styles.error}>Unable to load events. Please try again.</Text>
         <Text style={styles.retry} onPress={fetchEvents}>Tap to retry</Text>
       </View>
     );

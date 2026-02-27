@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Response, Query, Depends, Request
@@ -9,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.database import Database
 
 # --- MODELS ---
-from src.models import EventCreateSchema, EventUpdateSchema, UserSignupSchema, UserLoginSchema, EventAttendanceSchema
+from src.models import EventCreateSchema, EventUpdateSchema, EventResponseSchema, UserSignupSchema, UserLoginSchema, EventAttendanceSchema
 
 
 # --- AUTH DEPENDENCY ---
@@ -58,7 +59,7 @@ class UniNearBackend:
             "http://127.0.0.1:3000",
             "http://localhost:8081",
             "http://127.0.0.1:8081",
-            "*" # Allow all for development to rule out CORS issues
+            "*" # TODO: Remove wildcard before production — restrict to specific origins only
         ]
         self.app.add_middleware(
             CORSMiddleware,
@@ -73,7 +74,7 @@ class UniNearBackend:
         self.app.get("/")(self.read_root)
         self.app.post("/auth/signup")(self.signup)
         self.app.post("/auth/login")(self.login)
-        self.app.get("/events")(self.get_events)
+        self.app.get("/events", response_model=list[EventResponseSchema])(self.get_events)
 
         # Protected endpoints (require valid JWT)
         auth = [Depends(verify_token)]
@@ -88,7 +89,7 @@ class UniNearBackend:
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
 
-    def get_events(self) -> list[Dict[str, Any]]:
+    def get_events(self) -> list[dict]:
         try:
             now = datetime.now(timezone.utc).isoformat()
             response = (
@@ -102,30 +103,8 @@ class UniNearBackend:
             )
             return cast(list[Dict[str, Any]], response.data or [])
         except Exception as e:
-            import logging
-            logging.error(f"Database error fetching events: {e}. Returning mock data.")
-            return [
-                {
-                    "id": 1,
-                    "title": "Annual Tech Hackathon (Mock)",
-                    "start_time": "2025-10-15T09:00:00",
-                    "location": "Engineering Hub",
-                    "capacity": 200,
-                    "attendee_count": 142,
-                    "status": "Published",
-                    "organizer": "Tech Society"
-                },
-                {
-                    "id": 2,
-                    "title": "Industry Panel Night (Mock)",
-                    "start_time": "2025-10-22T18:30:00",
-                    "location": "Main Auditorium",
-                    "capacity": 150,
-                    "attendee_count": 89,
-                    "status": "Published",
-                    "organizer": "Business School"
-                },
-            ]
+            logging.error(f"Database error fetching events: {e}")
+            raise HTTPException(status_code=503, detail="Unable to load events")
 
     def create_event(self, event: EventCreateSchema):
         try:
