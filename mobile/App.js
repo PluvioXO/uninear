@@ -1,6 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, SafeAreaView, Platform, Image, TouchableOpacity, Alert, TextInput, Dimensions, Modal, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, Platform, Image, TouchableOpacity, Alert, TextInput, Dimensions, Modal, ScrollView } from 'react-native';
+
+const SafeAreaView = View;
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Calendar from 'expo-calendar';
 
@@ -72,6 +74,7 @@ export default function App() {
   const [followedIds, setFollowedIds] = useState(new Set(['bath-cs']));
 
   // Filter State
+  const [showFilters, setShowFilters] = useState(false);
   const [radius, setRadius] = useState(null);
   const [timeRange, setTimeRange] = useState(null);
   const [selectedMoods, setSelectedMoods] = useState([]);
