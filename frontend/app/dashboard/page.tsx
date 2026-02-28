@@ -75,7 +75,7 @@ export default function DashboardPage() {
   useEffect(() => { loadEvents(); }, []);
 
   // Derived state for statistics
-  const totalMembers = 1248; // Static for now
+  const totalMembers = 1248;
   const activeEventsCount = events.length;
   const totalAttendees = events.reduce((acc, curr) => acc + curr.attendees, 0);
   const avgAttendance = events.length > 0
