@@ -42,16 +42,87 @@ def test_read_root():
 def test_get_events():
     # Mock the database response
     mock_response = MagicMock()
-    mock_response.data = [{"id": 1, "title": "Mock Event"}]
-    
-    # We need to mock the chain: backend.db.client.table().select().execute()
+    mock_response.data = [
+        {"id": 1, "title": "Mock Event", "description": "Test", "location": "Hall",
+         "start_time": "2026-04-01T10:00:00+00:00", "capacity": 50, "attendee_count": 10,
+         "status": "Published", "organizer": "Org"}
+    ]
+
+    # Chain: table().select().eq().gte().order().execute()
     with patch.object(backend.db.client, 'table') as mock_table:
-        mock_table.return_value.select.return_value.execute.return_value = mock_response
-        
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
         response = client.get("/events")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
         assert response.json()[0]["title"] == "Mock Event"
+
+# --- FR-01: Event List Display Tests ---
+
+def test_FR01_display_events_sorted_by_date():
+    """GET /events returns published upcoming events sorted by start_time ASC."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Event A", "start_time": "2026-03-01T10:00:00", "location": "Hall A",
+         "capacity": 100, "attendee_count": 5, "status": "Published"},
+        {"id": 2, "title": "Event B", "start_time": "2026-04-01T10:00:00", "location": "Hall B",
+         "capacity": 50, "attendee_count": 10, "status": "Published"},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events")
+        assert response.status_code == 200
+        body = response.json()
+        assert isinstance(body, list)
+        assert len(body) == 2
+        # Verify sort order (soonest first)
+        assert body[0]["title"] == "Event A"
+        assert body[1]["title"] == "Event B"
+        # Verify required fields present
+        for event in body:
+            assert "id" in event
+            assert "title" in event
+            assert "start_time" in event
+            assert "location" in event
+            assert "capacity" in event
+            assert "attendee_count" in event
+
+def test_FR01_display_events_empty():
+    """GET /events returns empty list when no upcoming published events."""
+    mock_response = MagicMock()
+    mock_response.data = []
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events")
+        assert response.status_code == 200
+        assert response.json() == []
+
+def test_FR01_display_events_calls_correct_filters():
+    """GET /events filters by Published status and future start_time."""
+    mock_response = MagicMock()
+    mock_response.data = []
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        client.get("/events")
+
+        # Verify table and select were called
+        mock_table.assert_called_with("events")
+        # Verify filter chain: .eq("status", "Published").gte("start_time", ...).order("start_time")
+        chain.eq.assert_called_once_with("status", "Published")
+        chain.eq.return_value.gte.assert_called_once()
+        gte_args = chain.eq.return_value.gte.call_args
+        assert gte_args[0][0] == "start_time"  # First arg is column name
+        chain.eq.return_value.gte.return_value.order.assert_called_once_with("start_time")
 
 # 3. Test Create Event
 def test_create_event():
@@ -558,10 +629,115 @@ def test_NFR10_public_endpoints_no_auth():
     """Public endpoints (GET /events, auth routes) don't require auth."""
     # GET /events should work without token
     with patch.object(backend.db.client, 'table') as mock_table:
-        mock_table.return_value.select.return_value.execute.return_value = MagicMock(data=[])
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = MagicMock(data=[])
         response = client.get("/events")
         assert response.status_code == 200
 
     # GET / (root) should work without token
     response = client.get("/")
     assert response.status_code == 200
+
+# --- NFR-01: Event List Performance Tests ---
+
+# --- NFR-14: Event API Integration Tests ---
+
+def test_NFR14_events_api_integration():
+    """GET /events returns all required fields per AC-1: id, title, description, location, datetime, capacity, attendee_count."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {
+            "id": 1,
+            "title": "Campus Meetup",
+            "description": "A social gathering",
+            "location": "Student Union",
+            "start_time": "2026-04-01T14:00:00+00:00",
+            "capacity": 100,
+            "attendee_count": 25,
+            "status": "Published",
+            "organizer": "CS Society",
+            "latitude": 51.38,
+            "longitude": -2.36,
+        },
+        {
+            "id": 2,
+            "title": "Hackathon",
+            "description": None,
+            "location": "Engineering Building",
+            "start_time": "2026-05-10T09:00:00+00:00",
+            "capacity": 200,
+            "attendee_count": 0,
+            "status": "Published",
+            "organizer": "Tech Society",
+            "latitude": None,
+            "longitude": None,
+        },
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events")
+        assert response.status_code == 200
+        body = response.json()
+        assert isinstance(body, list)
+        assert len(body) == 2
+
+        # Verify ALL required fields are present in every event (AC-1)
+        required_fields = {"id", "title", "description", "location", "start_time", "capacity", "attendee_count"}
+        for event in body:
+            missing = required_fields - set(event.keys())
+            assert not missing, f"Event missing required fields: {missing}"
+
+        # Verify field types/values for first event
+        first = body[0]
+        assert first["id"] == 1
+        assert first["title"] == "Campus Meetup"
+        assert first["description"] == "A social gathering"
+        assert first["location"] == "Student Union"
+        assert first["start_time"] == "2026-04-01T14:00:00Z"
+        assert first["capacity"] == 100
+        assert first["attendee_count"] == 25
+
+        # Verify nullable description works
+        assert body[1]["description"] is None
+
+
+def test_NFR14_events_api_integration_error_returns_503():
+    """GET /events returns 503 when database fails so clients can show error UI (AC-2)."""
+    with patch.object(backend.db.client, 'table') as mock_table:
+        mock_table.side_effect = Exception("DB connection failed")
+
+        response = client.get("/events")
+        assert response.status_code == 503
+        assert "Unable to load events" in response.json()["detail"]
+
+
+def test_NFR01_event_list_performance():
+    """GET /events responds within 2000ms (NFR-01).
+
+    Note: This test uses a mocked database, so it only validates FastAPI
+    overhead — not real Supabase query latency. Full NFR-01 validation
+    requires an end-to-end test against the live database.
+    """
+    import time
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": i, "title": f"Event {i}", "description": f"Desc {i}", "location": "Hall",
+         "start_time": "2026-04-01T10:00:00+00:00", "capacity": 100, "attendee_count": i,
+         "status": "Published", "organizer": "Org"}
+        for i in range(20)
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        start = time.time()
+        response = client.get("/events")
+        elapsed = time.time() - start
+
+        assert response.status_code == 200
+        assert elapsed < 2.0, f"GET /events took {elapsed:.3f}s, exceeds 2s NFR-01 limit"
