@@ -56,6 +56,8 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const loadEvents = async () => {
     setLoading(true);
@@ -80,23 +82,41 @@ export default function DashboardPage() {
     ? Math.round(events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100)
     : 0;
 
-  const handleCreateEvent = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const newEvent: Event = {
-      id: Date.now(),
-      title: formData.get('title') as string,
-      date: formData.get('date') as string,
-      location: formData.get('location') as string,
-      attendees: 0,
-      capacity: Number(formData.get('capacity')),
-      status: 'Draft',
-      moods: (formData.get('moods') as string).split(',').map(s => s.trim()),
-      energy: formData.get('energy') as 'Low' | 'Medium' | 'High',
-      length: formData.get('length') as string
-    };
-    setEvents([...events, newEvent]);
-    setIsCreateModalOpen(false);
+    setIsCreating(true);
+    setCreateError(null);
+
+    try {
+      const formData = new FormData(e.currentTarget);
+      const eventData = {
+        title: formData.get('title') as string,
+        date: formData.get('date') as string,
+        location: formData.get('location') as string,
+        capacity: Number(formData.get('capacity')),
+        moods: (formData.get('moods') as string).split(',').map(s => s.trim()),
+        energy: formData.get('energy') as 'Low' | 'Medium' | 'High',
+        length: formData.get('length') as string
+      };
+
+      // TODO: Replace with actual API call
+      // await createEvent(eventData);
+
+      // For now, just add to local state
+      const newEvent: Event = {
+        id: Date.now(),
+        ...eventData,
+        attendees: 0,
+        status: 'Draft'
+      };
+
+      setEvents([...events, newEvent]);
+      setIsCreateModalOpen(false);
+    } catch (error) {
+      setCreateError('Failed to create event. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
