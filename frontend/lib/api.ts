@@ -30,19 +30,25 @@ export async function apiFetch(
   });
 }
 
-export async function createEvent(data: {
+/** Fetch upcoming published events (public endpoint, no auth required). */
+export async function fetchEvents(): Promise<EventResponse[]> {
+  const res = await fetch(`${API_BASE_URL}/events`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch events: ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface EventResponse {
+  id: number;
   title: string;
-  date: string;
-  location: string;
-  capacity: number;
-  organizer?: string;
-  status?: string;
-  mood_tags?: string[];
-  energy_level?: string;
   description?: string;
-}): Promise<Response> {
-  return apiFetch('/events', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
+  location: string;
+  start_time: string;
+  capacity: number;
+  attendee_count: number;
+  status: string;
+  organizer?: string;
+  latitude?: number;
+  longitude?: number;
 }
