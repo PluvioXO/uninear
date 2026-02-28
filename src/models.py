@@ -9,7 +9,7 @@ class EventCreateSchema(BaseModel):
     location: str
     capacity: int
     status: str = "Draft"
-    organizer: str
+    organizer: Optional[str] = None
     
     # Legacy/Optional fields
     end_time: Optional[datetime] = None
@@ -59,6 +59,20 @@ class UserLoginSchema(BaseModel):
         if not value.lower().endswith("@bath.ac.uk"):
             raise ValueError("Only @bath.ac.uk emails are allowed")
         return value.lower()
+
+class EventResponseSchema(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    location: str
+    start_time: datetime
+    capacity: int
+    attendee_count: int
+    status: str = "Published"
+    organizer: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
 
 class EventAttendanceSchema(BaseModel):
     event_id: int

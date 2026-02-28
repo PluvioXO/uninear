@@ -1,13 +1,25 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import MagneticButton from '@/components/MagneticButton';
+import { fetchEvents, type EventResponse } from '@/lib/api';
+
+const MapView = dynamic(() => import('@/components/MapView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[500px] border border-gray-200 rounded-2xl bg-white">
+      <div className="animate-pulse text-gray-400">Loading map...</div>
+    </div>
+  ),
+});
 
 // Types for our local data
 interface Event {
   id: number;
   title: string;
+  description?: string;
   date: string;
   location: string;
   attendees: number;
@@ -16,185 +28,57 @@ interface Event {
   moods?: string[];
   energy?: 'Low' | 'Medium' | 'High';
   length?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
-const INITIAL_EVENTS: Event[] = [
-  {
-    id: 1,
-    title: 'Annual Tech Hackathon',
-    date: '2025-10-15T09:00',
-    location: 'Engineering Hub',
-    attendees: 142,
-    capacity: 200,
-    status: 'Published',
-    moods: ['Coding', 'Competition', 'Pizza'],
-    energy: 'High',
-    length: '24 hours'
-  },
-  {
-    id: 2,
-    title: 'Industry Panel Night',
-    date: '2025-10-22T18:30',
-    location: 'Main Auditorium',
-    attendees: 89,
-    capacity: 150,
-    status: 'Draft',
-    moods: ['Networking', 'Career', 'Talk'],
-    energy: 'Medium',
-    length: '2 hours'
-  },
-  {
-    id: 3,
-    title: 'Freshers Mixer',
-    date: '2025-11-01T20:00',
-    location: 'Student Union Bar',
-    attendees: 45,
-    capacity: 100,
-    status: 'Scheduled',
-    moods: ['Social', 'Drinks', 'Fun'],
-    energy: 'High',
-    length: '4 hours'
-  },
-  {
-    id: 4,
-    title: 'Last Year&apos;s Ball',
-    date: '2024-12-15T19:00',
-    location: 'Grand Hotel',
-    attendees: 350,
-    capacity: 350,
-    status: 'Past',
-    moods: ['Formal', 'Dance', 'Dinner'],
-    energy: 'High',
-    length: '6 hours'
-  },
-  {
-    id: 5,
-    title: 'Coffee Morning',
-    date: '2024-11-10T10:00',
-    location: 'Campus Cafe',
-    attendees: 28,
-    capacity: 40,
-    status: 'Past',
-    moods: ['Chill', 'Coffee', 'Chat'],
-    energy: 'Low',
-    length: '2 hours'
-  },
-  {
-    id: 6,
-    title: 'Guest Speaker: AI Ethics',
-    date: '2024-10-05T14:00',
-    location: 'Lecture Hall A',
-    attendees: 180,
-    capacity: 200,
-    status: 'Past',
-    moods: ['Educational', 'Tech', 'Talk'],
-    energy: 'Medium',
-    length: '1.5 hours'
-  },
-  {
-    id: 7,
-    title: 'Welcome Week BBQ',
-    date: '2024-09-20T12:00',
-    location: 'Campus Green',
-    attendees: 280,
-    capacity: 300,
-    status: 'Past',
-    moods: ['Social', 'Food', 'Outdoor'],
-    energy: 'High',
-    length: '3 hours'
-  },
-  {
-    id: 8,
-    title: 'Late Night Study',
-    date: '2024-11-25T19:00',
-    location: 'Library Group Room',
-    attendees: 15,
-    capacity: 20,
-    status: 'Past',
-    moods: ['Study', 'Quiet', 'Focus'],
-    energy: 'Low',
-    length: '4 hours'
-  },
-  {
-    id: 9,
-    title: 'Gaming Tournament',
-    date: '2025-01-15T18:00',
-    location: 'Student Union',
-    attendees: 95,
-    capacity: 100,
-    status: 'Past',
-    moods: ['Gaming', 'Competition', 'Fun'],
-    energy: 'High',
-    length: '5 hours'
-  },
-  {
-    id: 10,
-    title: 'Career Fair Prep',
-    date: '2025-02-10T16:00',
-    location: 'Seminar Room 4',
-    attendees: 45,
-    capacity: 60,
-    status: 'Past',
-    moods: ['Career', 'Workshop', 'Professional'],
-    energy: 'Medium',
-    length: '1.5 hours'
-  },
-  {
-    id: 11,
-    title: 'Spring Picnic',
-    date: '2025-04-20T13:00',
-    location: 'City Park',
-    attendees: 120,
-    capacity: 150,
-    status: 'Past',
-    moods: ['Outdoor', 'Social', 'Relaxed'],
-    energy: 'Medium',
-    length: '4 hours'
-  },
-  {
-    id: 12,
-    title: 'End of Year Gala',
-    date: '2025-06-15T19:00',
-    location: 'Grand Ballroom',
-    attendees: 450,
-    capacity: 500,
-    status: 'Past',
-    moods: ['Formal', 'Party', 'Celebration'],
-    energy: 'High',
-    length: '6 hours'
-  },
-  {
-    id: 13,
-    title: 'Alumni Networking',
-    date: '2025-09-05T18:00',
-    location: 'Innovation Hub',
-    attendees: 75,
-    capacity: 100,
-    status: 'Past',
-    moods: ['Networking', 'Career', 'Alumni'],
-    energy: 'Medium',
-    length: '3 hours'
-  }
-];
+/** Map API response to local Event shape */
+function toEvent(e: EventResponse): Event {
+  return {
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    date: e.start_time,
+    location: e.location,
+    attendees: e.attendee_count,
+    capacity: e.capacity,
+    status: (['Published', 'Draft', 'Scheduled', 'Past'].includes(e.status)
+      ? e.status as Event['status']
+      : 'Published'),
+    latitude: e.latitude,
+    longitude: e.longitude,
+  };
+}
 
 export default function DashboardPage() {
-  const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
-  const [showPastEvents, setShowPastEvents] = useState(false);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+
+  const loadEvents = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchEvents();
+      setEvents(data.map(toEvent));
+    } catch {
+      setError('Unable to load events. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadEvents(); }, []);
 
   // Derived state for statistics
   const totalMembers = 1248; // Static for now
-  const activeEventsCount = events.filter(e => e.status !== 'Past').length;
+  const activeEventsCount = events.length;
   const totalAttendees = events.reduce((acc, curr) => acc + curr.attendees, 0);
-  const avgAttendance = Math.round(
-    events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100
-  );
-
-  const filteredEvents = events.filter(e => 
-    showPastEvents ? e.status === 'Past' : e.status !== 'Past'
-  );
-
-  const pastEvents = events.filter(e => e.status === 'Past').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const avgAttendance = events.length > 0
+    ? Math.round(events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100)
+    : 0;
 
   const handleCreateEvent = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -291,12 +175,16 @@ export default function DashboardPage() {
                     <input name="moods" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Social, Fun" />
                   </div>
                 </div>
+                {createError && (
+                  <p className="text-red-600 text-sm">{createError}</p>
+                )}
                 <div className="pt-4">
                   <MagneticButton
-                    label="Create Event"
-                    className="w-full bg-gray-900 text-white justify-center"
+                    label={isCreating ? 'Creating...' : 'Create Event'}
+                    className="w-full bg-gray-900 text-white justify-center disabled:opacity-50"
                     accentClassName="from-orange-400 via-amber-400 to-yellow-400"
                     type="submit"
+                    disabled={isCreating}
                   />
                 </div>
               </form>
@@ -339,87 +227,64 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Performance Overview */}
-        <div className="mb-10">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-            Performance Overview
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 border border-gray-200 rounded-3xl p-6 bg-white shadow-sm">
-              <h3 className="text-sm font-medium text-gray-500 mb-6">Attendance Trend (Past Events)</h3>
-              <div className="flex justify-between h-48 gap-4">
-                {pastEvents.length === 0 ? (
-                  <p className="text-gray-500 w-full text-center self-center">No past events data available.</p>
-                ) : pastEvents.map((event) => (
-                  <div key={event.id} className="flex flex-col items-center gap-2 flex-1 group h-full">
-                    <div className="w-full bg-gray-100 rounded-t-lg relative flex-1 flex items-end overflow-hidden">
-                      <div 
-                        className="w-full bg-gradient-to-t from-orange-500 to-orange-600 transition-all duration-500 group-hover:opacity-80"
-                        style={{ height: `${(event.attendees / event.capacity) * 100}%` }}
-                      >
-                        <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-2 py-1 rounded pointer-events-none whitespace-nowrap z-10">
-                          {event.attendees} / {event.capacity}
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-500 truncate w-full text-center">{new Date(event.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="border border-gray-200 rounded-3xl p-6 bg-white shadow-sm flex flex-col justify-center">
-              <h3 className="text-sm font-medium text-gray-500 mb-4">Key Insights</h3>
-              <ul className="space-y-4">
-                <li className="flex gap-3 items-start">
-                  <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs">↑</div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">Attendance Growth</p>
-                    <p className="text-xs text-gray-500">Your events are seeing a 15% increase in attendance month-over-month.</p>
-                  </div>
-                </li>
-                <li className="flex gap-3 items-start">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">★</div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">Top Category</p>
-                    <p className="text-xs text-gray-500">&quot;Social&quot; events have the highest engagement rate (85%).</p>
-                  </div>
-                </li>
-                <li className="flex gap-3 items-start">
-                  <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs">⚡</div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">Peak Energy</p>
-                    <p className="text-xs text-gray-500">High energy events retain attendees 20% longer.</p>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
         {/* Main Content Grid */}
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Upcoming Events */}
           <div className="lg:col-span-2 space-y-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold flex items-center gap-2 text-gray-900">
-                <span className={`w-2 h-2 ${showPastEvents ? 'bg-gray-500' : 'bg-orange-600'} rounded-full`}></span>
-                {showPastEvents ? 'Past Events' : 'Upcoming Events'}
+                <span className="w-2 h-2 bg-orange-600 rounded-full"></span>
+                Upcoming Events
               </h2>
-              <button 
-                onClick={() => setShowPastEvents(!showPastEvents)}
-                className="text-sm text-orange-600 hover:text-orange-500 transition-colors bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm"
-              >
-                {showPastEvents ? 'Show Upcoming' : 'Show Past'}
-              </button>
+              <div className="flex bg-gray-100 rounded-xl p-1" data-testid="view-toggle">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  data-testid="view-toggle-list"
+                >
+                  List
+                </button>
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    viewMode === 'map' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  data-testid="view-toggle-map"
+                >
+                  Map
+                </button>
+              </div>
             </div>
             
-            <div className="space-y-4">
-              {filteredEvents.length === 0 ? (
-                <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
-                  <p className="text-gray-500">No events found.</p>
-                </div>
-              ) : filteredEvents.map((event) => (
+            {loading ? (
+              <div className="space-y-4" data-testid="loading-skeleton">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm animate-pulse">
+                    <div className="h-5 bg-gray-200 rounded w-2/3 mb-3" />
+                    <div className="h-4 bg-gray-100 rounded w-1/2 mb-3" />
+                    <div className="h-3 bg-gray-100 rounded w-1/4" />
+                  </div>
+                ))}
+              </div>
+            ) : error ? (
+              <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
+                <p className="text-red-600 mb-4">{error}</p>
+                <button
+                  onClick={loadEvents}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-500 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : viewMode === 'map' ? (
+              <MapView events={events} />
+            ) : events.length === 0 ? (
+              <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
+                <p className="text-gray-500">No upcoming events</p>
+              </div>
+            ) : <div className="space-y-4">{events.map((event) => (
                 <div key={event.id} className="group border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md hover:border-orange-200 transition-all cursor-pointer">
                   <div className="flex justify-between items-start">
                     <div>
@@ -456,8 +321,7 @@ export default function DashboardPage() {
                     />
                   </div>
                 </div>
-              ))}
-            </div>
+              ))}</div>}
           </div>
 
           {/* Quick Actions & Notifications */}

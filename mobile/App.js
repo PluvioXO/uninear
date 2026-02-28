@@ -98,7 +98,7 @@ export default function App() {
       setError(null);
     } catch (err) {
       console.error('Fetch error:', err);
-      setError(err.message);
+      setError('Unable to load events. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -536,7 +536,7 @@ export default function App() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text style={styles.error}>Error: {error}</Text>
+        <Text style={styles.error}>Unable to load events. Please try again.</Text>
         <Text style={styles.retry} onPress={fetchEvents}>Tap to retry</Text>
       </View>
     );

@@ -1,3 +1,6 @@
+import logging
+from datetime import datetime, timezone
+
 from fastapi import FastAPI, HTTPException, Response, Query, Depends, Request
 from fastapi.responses import JSONResponse
 from typing import Any, Dict, cast
@@ -7,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.database import Database
 
 # --- MODELS ---
-from src.models import EventCreateSchema, EventUpdateSchema, UserSignupSchema, UserLoginSchema, EventAttendanceSchema
+from src.models import EventCreateSchema, EventUpdateSchema, EventResponseSchema, UserSignupSchema, UserLoginSchema, EventAttendanceSchema
 
 
 # --- AUTH DEPENDENCY ---
@@ -71,7 +74,7 @@ class UniNearBackend:
         self.app.get("/")(self.read_root)
         self.app.post("/auth/signup")(self.signup)
         self.app.post("/auth/login")(self.login)
-        self.app.get("/events")(self.get_events)
+        self.app.get("/events", response_model=list[EventResponseSchema])(self.get_events)
 
         # Protected endpoints (require valid JWT)
         auth = [Depends(verify_token)]
@@ -86,82 +89,35 @@ class UniNearBackend:
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
 
-    def get_events(self) -> list[Dict[str, Any]]:
+    def get_events(self) -> list[dict]:
         try:
-            response = self.db.client.table("events").select("*").execute()
+            now = datetime.now(timezone.utc).isoformat()
+            response = (
+                self.db.client
+                .table("events")
+                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, latitude, longitude")
+                .eq("status", "Published")
+                .gte("start_time", now)
+                .order("start_time")
+                .execute()
+            )
             return cast(list[Dict[str, Any]], response.data or [])
         except Exception as e:
-            print(f"Database error: {e}. Returning mock data.")
-            return [
-                {
-                    "id": 1,
-                    "title": "Annual Tech Hackathon (Mock)",
-                    "date": "2025-10-15T09:00:00",
-                    "location": "Engineering Hub",
-                    "capacity": 200,
-                    "status": "Published",
-                    "latitude": 51.3758,
-                    "longitude": -2.3599,
-                    "moods": ["focused", "energetic"],
-                    "energy_level": "high",
-                    "friends_attending": ["Alice", "Bob", "Charlie"],
-                    "rating": 4.8,
-                    "organizer": "Tech Society"
-                },
-                {
-                    "id": 2,
-                    "title": "Industry Panel Night (Mock)",
-                    "date": "2025-10-22T18:30:00",
-                    "location": "Main Auditorium",
-                    "capacity": 150,
-                    "status": "Draft",
-                    "latitude": 51.3800,
-                    "longitude": -2.3600,
-                    "moods": ["social", "relaxed"],
-                    "energy_level": "medium",
-                    "friends_attending": [],
-                    "rating": 4.2,
-                    "organizer": "Business School"
-                },
-                {
-                    "id": 3,
-                    "title": "Yoga & Mindfulness",
-                    "date": "2025-10-16T08:00:00",
-                    "location": "Student Center",
-                    "capacity": 30,
-                    "status": "Published",
-                    "latitude": 51.3700,
-                    "longitude": -2.3550,
-                    "moods": ["relaxed", "focused"],
-                    "energy_level": "low",
-                    "friends_attending": ["Alice"],
-                    "rating": 4.9,
-                    "organizer": "Wellness Club"
-                },
-                {
-                    "id": 4,
-                    "title": "Friday Night Social",
-                    "date": "2025-10-17T20:00:00",
-                    "location": "Student Bar",
-                    "capacity": 100,
-                    "status": "Published",
-                    "latitude": 51.3750,
-                    "longitude": -2.3650,
-                    "moods": ["social", "energetic"],
-                    "energy_level": "high",
-                    "friends_attending": ["Bob", "David", "Eve"],
-                    "rating": 4.5,
-                    "organizer": "Student Union"
-                }
-            ]
+            logging.error(f"Database error fetching events: {e}")
+            raise HTTPException(status_code=503, detail="Unable to load events")
 
-    def create_event(self, event: EventCreateSchema):
+    def create_event(self, event: EventCreateSchema, user: Dict[str, Any] = Depends(verify_token)):
         try:
             event_data = event.model_dump(exclude_none=True)
             if 'date' in event_data:
                 event_data['start_time'] = event_data.pop('date').isoformat()
-            
-            response = self.db.client.table("events").insert(event_data).execute()
+            event_data['organiser_id'] = user['user_id']
+
+            # Use admin client to bypass RLS insert policy (the anon-key client
+            # cannot insert into events because the RLS policy restricts inserts
+            # to the service_role). Auth is still enforced via the JWT dependency.
+            db = self.db.admin or self.db.client
+            response = db.table("events").insert(event_data).execute()
             return response.data[0]
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -370,6 +326,8 @@ class UniNearBackend:
             return response
         except Exception as e:
             error_msg = str(e).lower()
+            if "email not confirmed" in error_msg:
+                raise HTTPException(status_code=403, detail="Please confirm your email before logging in. Check your inbox for a confirmation link.")
             if "invalid login credentials" in error_msg or "invalid credentials" in error_msg or "user not found" in error_msg:
                 raise HTTPException(status_code=401, detail="Invalid email or password")
             raise HTTPException(status_code=400, detail=str(e))

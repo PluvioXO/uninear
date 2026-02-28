@@ -29,7 +29,11 @@ export default function LoginPage() {
       const { error: authError } = await login(email, password);
 
       if (authError) {
-        setError('Invalid email or password');
+        if (authError.message?.toLowerCase().includes('email not confirmed')) {
+          setError('Please confirm your email before logging in. Check your inbox for a confirmation link.');
+        } else {
+          setError('Invalid email or password');
+        }
         setLoading(false);
         return;
       }
@@ -105,7 +109,7 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <p role="alert" className="text-sm text-red-600 text-center">{error}</p>
+              <p role="alert" className={`text-sm text-center ${error.includes('confirm your email') ? 'text-orange-600 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3' : 'text-red-600'}`}>{error}</p>
             )}
 
             <button
