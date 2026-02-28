@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
+import { createEvent } from '@/lib/api';
 
 // Types for our local data
 interface Event {
@@ -181,6 +182,8 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   // Derived state for statistics
   const totalMembers = 1248; // Static for now
@@ -190,9 +193,54 @@ export default function DashboardPage() {
     events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100
   );
 
-  const filteredEvents = events.filter(e => 
+  const filteredEvents = events.filter(e =>
     showPastEvents ? e.status === 'Past' : e.status !== 'Past'
   );
+
+  async function handleCreateEvent(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCreateError(null);
+    setIsCreating(true);
+
+    const formData = new FormData(e.currentTarget);
+    const payload = {
+      title: formData.get('title') as string,
+      date: new Date(formData.get('date') as string).toISOString(),
+      location: formData.get('location') as string,
+      capacity: Number(formData.get('capacity')),
+      status: 'Draft',
+      mood_tags: (formData.get('moods') as string).split(',').map(s => s.trim()),
+      energy_level: formData.get('energy') as string,
+    };
+
+    try {
+      const res = await createEvent(payload);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setCreateError(body?.detail ?? 'Failed to create event. Please try again.');
+        return;
+      }
+
+      const created = await res.json();
+      setEvents(prev => [...prev, {
+        id: created.id,
+        title: created.title,
+        date: created.date,
+        location: created.location,
+        attendees: 0,
+        capacity: created.capacity,
+        status: created.status,
+        moods: created.mood_tags,
+        energy: created.energy_level,
+        length: formData.get('length') as string,
+      }]);
+      setIsCreateModalOpen(false);
+    } catch {
+      setCreateError('Network error. Please check your connection.');
+    } finally {
+      setIsCreating(false);
+    }
+  }
 
   const pastEvents = events.filter(e => e.status === 'Past').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -233,24 +281,7 @@ export default function DashboardPage() {
                 ✕
               </button>
               <h2 className="text-2xl font-bold mb-6 text-gray-900">Create New Event</h2>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const newEvent: Event = {
-                  id: Date.now(),
-                  title: formData.get('title') as string,
-                  date: formData.get('date') as string,
-                  location: formData.get('location') as string,
-                  attendees: 0,
-                  capacity: Number(formData.get('capacity')),
-                  status: 'Draft',
-                  moods: (formData.get('moods') as string).split(',').map(s => s.trim()),
-                  energy: formData.get('energy') as 'Low' | 'Medium' | 'High',
-                  length: formData.get('length') as string
-                };
-                setEvents([...events, newEvent]);
-                setIsCreateModalOpen(false);
-              }} className="space-y-4">
+              <form onSubmit={handleCreateEvent} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-500 mb-1">Event Title</label>
                   <input name="title" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Annual Hackathon" />
@@ -289,12 +320,16 @@ export default function DashboardPage() {
                     <input name="moods" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Social, Fun" />
                   </div>
                 </div>
+                {createError && (
+                  <p className="text-red-600 text-sm">{createError}</p>
+                )}
                 <div className="pt-4">
                   <MagneticButton
-                    label="Create Event"
-                    className="w-full bg-gray-900 text-white justify-center"
+                    label={isCreating ? 'Creating...' : 'Create Event'}
+                    className="w-full bg-gray-900 text-white justify-center disabled:opacity-50"
                     accentClassName="from-orange-400 via-amber-400 to-yellow-400"
                     type="submit"
+                    disabled={isCreating}
                   />
                 </div>
               </form>
