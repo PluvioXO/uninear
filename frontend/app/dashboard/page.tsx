@@ -1,9 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import MagneticButton from '@/components/MagneticButton';
 import { fetchEvents, type EventResponse } from '@/lib/api';
+
+const MapView = dynamic(() => import('@/components/MapView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[500px] border border-gray-200 rounded-2xl bg-white">
+      <div className="animate-pulse text-gray-400">Loading map...</div>
+    </div>
+  ),
+});
 
 // Types for our local data
 interface Event {
@@ -18,6 +28,8 @@ interface Event {
   moods?: string[];
   energy?: 'Low' | 'Medium' | 'High';
   length?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 /** Map API response to local Event shape */
@@ -33,6 +45,8 @@ function toEvent(e: EventResponse): Event {
     status: (['Published', 'Draft', 'Scheduled', 'Past'].includes(e.status)
       ? e.status as Event['status']
       : 'Published'),
+    latitude: e.latitude,
+    longitude: e.longitude,
   };
 }
 
@@ -41,6 +55,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
 
   const loadEvents = async () => {
     setLoading(true);
@@ -215,34 +230,55 @@ export default function DashboardPage() {
                 <span className="w-2 h-2 bg-orange-600 rounded-full"></span>
                 Upcoming Events
               </h2>
+              <div className="flex bg-gray-100 rounded-xl p-1" data-testid="view-toggle">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  data-testid="view-toggle-list"
+                >
+                  List
+                </button>
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    viewMode === 'map' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  data-testid="view-toggle-map"
+                >
+                  Map
+                </button>
+              </div>
             </div>
             
-            <div className="space-y-4">
-              {loading ? (
-                <div className="space-y-4" data-testid="loading-skeleton">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm animate-pulse">
-                      <div className="h-5 bg-gray-200 rounded w-2/3 mb-3" />
-                      <div className="h-4 bg-gray-100 rounded w-1/2 mb-3" />
-                      <div className="h-3 bg-gray-100 rounded w-1/4" />
-                    </div>
-                  ))}
-                </div>
-              ) : error ? (
-                <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
-                  <p className="text-red-600 mb-4">{error}</p>
-                  <button
-                    onClick={loadEvents}
-                    className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-500 transition-colors"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : events.length === 0 ? (
-                <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
-                  <p className="text-gray-500">No upcoming events</p>
-                </div>
-              ) : events.map((event) => (
+            {loading ? (
+              <div className="space-y-4" data-testid="loading-skeleton">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm animate-pulse">
+                    <div className="h-5 bg-gray-200 rounded w-2/3 mb-3" />
+                    <div className="h-4 bg-gray-100 rounded w-1/2 mb-3" />
+                    <div className="h-3 bg-gray-100 rounded w-1/4" />
+                  </div>
+                ))}
+              </div>
+            ) : error ? (
+              <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
+                <p className="text-red-600 mb-4">{error}</p>
+                <button
+                  onClick={loadEvents}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-500 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : viewMode === 'map' ? (
+              <MapView events={events} />
+            ) : events.length === 0 ? (
+              <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
+                <p className="text-gray-500">No upcoming events</p>
+              </div>
+            ) : <div className="space-y-4">{events.map((event) => (
                 <div key={event.id} className="group border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md hover:border-orange-200 transition-all cursor-pointer">
                   <div className="flex justify-between items-start">
                     <div>
@@ -279,8 +315,7 @@ export default function DashboardPage() {
                     />
                   </div>
                 </div>
-              ))}
-            </div>
+              ))}</div>}
           </div>
 
           {/* Quick Actions & Notifications */}
