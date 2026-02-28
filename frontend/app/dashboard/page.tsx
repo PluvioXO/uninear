@@ -117,24 +117,7 @@ export default function DashboardPage() {
                 ✕
               </button>
               <h2 className="text-2xl font-bold mb-6 text-gray-900">Create New Event</h2>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const newEvent: Event = {
-                  id: Date.now(),
-                  title: formData.get('title') as string,
-                  date: formData.get('date') as string,
-                  location: formData.get('location') as string,
-                  attendees: 0,
-                  capacity: Number(formData.get('capacity')),
-                  status: 'Draft',
-                  moods: (formData.get('moods') as string).split(',').map(s => s.trim()),
-                  energy: formData.get('energy') as 'Low' | 'Medium' | 'High',
-                  length: formData.get('length') as string
-                };
-                setEvents([...events, newEvent]);
-                setIsCreateModalOpen(false);
-              }} className="space-y-4">
+              <form onSubmit={handleCreateEvent} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-500 mb-1">Event Title</label>
                   <input name="title" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Annual Hackathon" />
@@ -173,12 +156,16 @@ export default function DashboardPage() {
                     <input name="moods" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Social, Fun" />
                   </div>
                 </div>
+                {createError && (
+                  <p className="text-red-600 text-sm">{createError}</p>
+                )}
                 <div className="pt-4">
                   <MagneticButton
-                    label="Create Event"
-                    className="w-full bg-gray-900 text-white justify-center"
+                    label={isCreating ? 'Creating...' : 'Create Event'}
+                    className="w-full bg-gray-900 text-white justify-center disabled:opacity-50"
                     accentClassName="from-orange-400 via-amber-400 to-yellow-400"
                     type="submit"
+                    disabled={isCreating}
                   />
                 </div>
               </form>

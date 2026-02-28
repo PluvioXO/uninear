@@ -9,7 +9,7 @@ class EventCreateSchema(BaseModel):
     location: str
     capacity: int
     status: str = "Draft"
-    organizer: str
+    organizer: Optional[str] = None
     
     # Legacy/Optional fields
     end_time: Optional[datetime] = None
