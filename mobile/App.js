@@ -1,22 +1,17 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, FlatList, ActivityIndicator, SafeAreaView, Platform, Image, TouchableOpacity, Alert, TextInput, Dimensions, Modal, ScrollView } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Calendar from 'expo-calendar';
 
-// API base URL — uses platform-appropriate default for local dev.
-// Android emulator: 10.0.2.2 maps to host loopback; iOS simulator/web: localhost works directly.
-const API_BASE = Platform.select({
-  android: 'http://10.0.2.2:8000',
-  default: 'http://localhost:8000',
-});
-const API_URL = `${API_BASE}/events`;
+// API URL — production backend
+const API_URL = 'https://uninear-gvjz.vercel.app/events';
 
 const MOCK_USER = {
   name: 'Maximilian Nicholson',
   email: 'maximilian.nicholson@bath.ac.uk',
   role: 'Student Member',
-  avatar: 'https://ui-avatars.com/api/?name=Maximilian+Nicholson&background=a855f7&color=fff&size=128',
+  avatar: 'https://ui-avatars.com/api/?name=Maximilian+Nicholson&background=ea580c&color=fff&size=128',
   bio: 'Computer Science student at University of Bath. Love hackathons and coffee.',
   location: 'Bath, UK',
   interests: ['Coding', 'Hackathons', 'Coffee', 'Music', 'Tech']
@@ -34,6 +29,13 @@ const MOCK_FRIENDS = [
   { id: 3, name: 'Charlie Brown', status: 'In Class', avatar: 'https://ui-avatars.com/api/?name=Charlie+Brown&background=fdffb6&color=fff' },
   { id: 4, name: 'David Wilson', status: 'Lunch Break', avatar: 'https://ui-avatars.com/api/?name=David+Wilson&background=caffbf&color=fff' },
   { id: 5, name: 'Eve Davis', status: 'Available', avatar: 'https://ui-avatars.com/api/?name=Eve+Davis&background=9bf6ff&color=fff' },
+];
+
+// Seed societies — these also get created dynamically from event organisers
+const SEED_SOCIETIES = [
+  { id: 'bath-cs', name: 'Bath CS Society', description: 'Computing events, hackathons & talks.', avatar: 'https://ui-avatars.com/api/?name=CS+Society&background=ea580c&color=fff' },
+  { id: 'bath-tech', name: 'Bath Tech Hub', description: 'Industry connections and workshops.', avatar: 'https://ui-avatars.com/api/?name=Tech+Hub&background=3b82f6&color=fff' },
+  { id: 'bath-ents', name: 'Bath Ents', description: 'Social events and nights out.', avatar: 'https://ui-avatars.com/api/?name=Bath+Ents&background=f59e0b&color=fff' },
 ];
 
 const getDistance = (lat1, lon1, lat2, lon2) => {
@@ -56,21 +58,25 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
+  const [viewMode, setViewMode] = useState('list'); // 'list', 'map', 'filter'
   const [currentTab, setCurrentTab] = useState('events'); // 'events', 'friends', 'profile'
+  const [selectedEvent, setSelectedEvent] = useState(null); // event detail modal
   
   // Profile State
   const [userProfile, setUserProfile] = useState(MOCK_USER);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState(MOCK_USER);
+  const [profileTab, setProfileTab] = useState('info'); // 'info' | 'following'
+
+  // Following State — set of society/organiser IDs
+  const [followedIds, setFollowedIds] = useState(new Set(['bath-cs']));
 
   // Filter State
-  const [showFilters, setShowFilters] = useState(false);
-  const [radius, setRadius] = useState(null); // 100, 500, 1000 (meters)
-  const [timeRange, setTimeRange] = useState(null); // 'now', '1hr', '2hr', 'today', 'week'
+  const [radius, setRadius] = useState(null);
+  const [timeRange, setTimeRange] = useState(null);
   const [selectedMoods, setSelectedMoods] = useState([]);
-  const [selectedEnergy, setSelectedEnergy] = useState(null); // 'high', 'medium', 'low'
-  const [minRating, setMinRating] = useState(null); // 4.0, 4.5
+  const [selectedEnergy, setSelectedEnergy] = useState(null);
+  const [minRating, setMinRating] = useState(null);
 
   useEffect(() => {
     fetchEvents();
@@ -111,10 +117,16 @@ export default function App() {
   };
 
   const filteredEvents = events.filter(event => {
-    // Search Filter
-    const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.location.toLowerCase().includes(searchQuery.toLowerCase());
-    if (!matchesSearch) return false;
+    // Search Filter — title, location, organizer, description
+    if (searchQuery.trim().length > 0) {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        (event.title       || '').toLowerCase().includes(q) ||
+        (event.location    || '').toLowerCase().includes(q) ||
+        (event.organizer   || '').toLowerCase().includes(q) ||
+        (event.description || '').toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+    }
 
     // Radius Filter
     if (radius && event.latitude && event.longitude) {
@@ -149,6 +161,55 @@ export default function App() {
 
     return true;
   });
+
+  const activeFilterCount = [
+    radius !== null,
+    timeRange !== null,
+    selectedMoods.length > 0,
+    selectedEnergy !== null,
+    minRating !== null,
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setRadius(null);
+    setTimeRange(null);
+    setSelectedMoods([]);
+    setSelectedEnergy(null);
+    setMinRating(null);
+  };
+
+  // Build a deduplicated society list from seed + live event organisers
+  const allSocieties = (() => {
+    const map = new Map(SEED_SOCIETIES.map(s => [s.id, s]));
+    events.forEach(e => {
+      if (e.organizer) {
+        const id = e.organizer.toLowerCase().replace(/\s+/g, '-');
+        if (!map.has(id)) {
+          map.set(id, {
+            id,
+            name: e.organizer,
+            description: 'Society on Uninear.',
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.organizer)}&background=ea580c&color=fff`,
+          });
+        }
+      }
+    });
+    return Array.from(map.values());
+  })();
+
+  const toggleFollow = (societyId) => {
+    setFollowedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(societyId)) {
+        next.delete(societyId);
+      } else {
+        next.add(societyId);
+      }
+      return next;
+    });
+  };
+
+  const followedSocieties = allSocieties.filter(s => followedIds.has(s.id));
 
   const renderFriendItem = ({ item }) => (
     <View style={styles.friendCard}>
@@ -187,7 +248,78 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {isEditingProfile ? (
+      {/* Stats row */}
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{events.length}</Text>
+          <Text style={styles.statLabel}>Events</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <TouchableOpacity style={styles.statItem} onPress={() => setProfileTab('following')}>
+          <Text style={styles.statNumber}>{followedIds.size}</Text>
+          <Text style={styles.statLabel}>Following</Text>
+        </TouchableOpacity>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{MOCK_FRIENDS.length}</Text>
+          <Text style={styles.statLabel}>Friends</Text>
+        </View>
+      </View>
+
+      {/* Profile sub-tabs */}
+      <View style={styles.profileTabs}>
+        {['info', 'following'].map(tab => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.profileTabBtn, profileTab === tab && styles.profileTabBtnActive]}
+            onPress={() => setProfileTab(tab)}
+          >
+            <Text style={[styles.profileTabText, profileTab === tab && styles.profileTabTextActive]}>
+              {tab === 'info' ? 'Profile' : `Following (${followedIds.size})`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {profileTab === 'following' ? (
+        /* ── Following list ── */
+        followedSocieties.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>🏛️</Text>
+            <Text style={styles.emptyStateText}>You're not following any societies yet.</Text>
+            <Text style={styles.emptyStateSubText}>Tap "+ Follow" on any event card to follow that society.</Text>
+          </View>
+        ) : (
+          <View>
+            {followedSocieties.map(society => {
+              const upcomingCount = events.filter(e =>
+                e.organizer &&
+                e.organizer.toLowerCase().replace(/\s+/g, '-') === society.id
+              ).length;
+              return (
+                <View key={society.id} style={styles.societyCard}>
+                  <Image source={{ uri: society.avatar }} style={styles.societyAvatar} />
+                  <View style={styles.societyInfo}>
+                    <Text style={styles.societyName}>{society.name}</Text>
+                    <Text style={styles.societyDesc} numberOfLines={1}>{society.description}</Text>
+                    {upcomingCount > 0 && (
+                      <Text style={styles.societyEvents}>{upcomingCount} event{upcomingCount !== 1 ? 's' : ''}</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.unfollowButton}
+                    onPress={() => toggleFollow(society.id)}
+                  >
+                    <Text style={styles.unfollowButtonText}>Unfollow</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        )
+      ) : (
+        /* ── Profile info / edit ── */
+        isEditingProfile ? (
         <View style={styles.editForm}>
           <Text style={styles.label}>Name</Text>
           <TextInput
@@ -286,6 +418,7 @@ export default function App() {
             <Text style={styles.editProfileButtonText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
+      )
       )}
     </ScrollView>
   );
@@ -321,7 +454,11 @@ export default function App() {
     }
   };
 
-  const renderEventItem = ({ item }) => (
+  const renderEventItem = ({ item }) => {
+    const societyId = item.organizer ? item.organizer.toLowerCase().replace(/\s+/g, '-') : null;
+    const isFollowing = societyId ? followedIds.has(societyId) : false;
+
+    return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.title}>{item.title}</Text>
@@ -334,7 +471,22 @@ export default function App() {
       
       <Text style={styles.date}>{new Date(item.start_time || item.date).toLocaleDateString()} • {new Date(item.start_time || item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
       <Text style={styles.location}>{item.location}</Text>
-      {item.organizer && <Text style={styles.organizer}>Hosted by {item.organizer}</Text>}
+
+      {item.organizer && (
+        <View style={styles.organizerRow}>
+          <Text style={styles.organizer}>Hosted by {item.organizer}</Text>
+          {societyId && (
+            <TouchableOpacity
+              style={[styles.followChip, isFollowing && styles.followChipActive]}
+              onPress={() => toggleFollow(societyId)}
+            >
+              <Text style={[styles.followChipText, isFollowing && styles.followChipTextActive]}>
+                {isFollowing ? '✓ Following' : '+ Follow'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
       
       <View style={styles.tagsContainer}>
         {item.energy_level && (
@@ -371,11 +523,12 @@ export default function App() {
       </View>
     </View>
   );
+  };
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#a855f7" />
+        <ActivityIndicator size="large" color="#ea580c" />
       </View>
     );
   }
@@ -402,28 +555,103 @@ export default function App() {
         </View>
         
         <View style={styles.controls}>
-          <TextInput
-            style={styles.searchBar}
-            placeholder="Search events..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          <TouchableOpacity 
-            style={styles.filterButton}
-            onPress={() => setShowFilters(true)}
-          >
-            <Text style={styles.filterButtonText}>Filters</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.viewToggle}
-            onPress={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
-          >
-            <Text style={styles.viewToggleText}>
-              {viewMode === 'list' ? 'Map' : 'List'}
+          <View style={styles.searchContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchBar}
+              placeholder="Search by name, location, organiser..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                // Auto-switch to list when user starts typing
+                if (text.length > 0 && viewMode !== 'list') setViewMode('list');
+              }}
+              returnKeyType="search"
+              clearButtonMode="never"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.searchClearButton}>
+                <Text style={styles.searchClearText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {searchQuery.trim().length > 0 && (
+            <Text style={styles.searchResultCount}>
+              {filteredEvents.length} result{filteredEvents.length !== 1 ? 's' : ''} for &quot;{searchQuery}&quot;
             </Text>
-          </TouchableOpacity>
+          )}
+        </View>
+
+        {/* View mode segmented control */}
+        <View style={styles.segmentedControl}>
+          {[
+            { key: 'list', label: '☰  List' },
+            { key: 'map',  label: '🗺  Map'  },
+            { key: 'filter', label: `⚙  Filter${activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}` },
+          ].map(({ key, label }) => (
+            <TouchableOpacity
+              key={key}
+              style={[styles.segmentButton, viewMode === key && styles.segmentButtonActive]}
+              onPress={() => setViewMode(key)}
+            >
+              <Text style={[styles.segmentText, viewMode === key && styles.segmentTextActive]}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
+
+      {/* Event detail modal — opened from map callout */}
+      <Modal
+        visible={selectedEvent !== null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedEvent(null)}
+      >
+        {selectedEvent && (
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <ScrollView>
+                <Text style={styles.modalTitle}>{selectedEvent.title}</Text>
+                <Text style={styles.modalDate}>
+                  {new Date(selectedEvent.start_time || selectedEvent.date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+                  {' · '}
+                  {new Date(selectedEvent.start_time || selectedEvent.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                <Text style={styles.modalLocation}>📍 {selectedEvent.location}</Text>
+                {selectedEvent.organizer && (
+                  <Text style={styles.modalOrganizer}>Hosted by {selectedEvent.organizer}</Text>
+                )}
+                {selectedEvent.description && (
+                  <Text style={styles.modalDescription}>{selectedEvent.description}</Text>
+                )}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={() => { handleRSVP(selectedEvent.title); setSelectedEvent(null); }}
+                  >
+                    <Text style={styles.closeButtonText}>RSVP</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.modalSecondaryButton}
+                    onPress={() => { addToCalendar(selectedEvent); setSelectedEvent(null); }}
+                  >
+                    <Text style={styles.modalSecondaryButtonText}>Add to Calendar</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.modalCloseX}
+                onPress={() => setSelectedEvent(null)}
+              >
+                <Text style={styles.modalCloseXText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </Modal>
 
       <Modal
         visible={showFilters}
@@ -524,15 +752,27 @@ export default function App() {
 
       {currentTab === 'events' ? (
         viewMode === 'list' ? (
-          <FlatList
-            data={filteredEvents}
-            renderItem={renderEventItem}
-            keyExtractor={item => item.id.toString()}
-            contentContainerStyle={styles.list}
-            refreshing={loading}
-            onRefresh={fetchEvents}
-          />
-        ) : (
+          filteredEvents.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>🔍</Text>
+              <Text style={styles.emptyStateText}>No events match your search{activeFilterCount > 0 ? ' or filters' : ''}.</Text>
+              {activeFilterCount > 0 && (
+                <TouchableOpacity onPress={resetFilters}>
+                  <Text style={styles.clearFiltersText}>Clear filters</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <FlatList
+              data={filteredEvents}
+              renderItem={renderEventItem}
+              keyExtractor={item => item.id.toString()}
+              contentContainerStyle={styles.list}
+              refreshing={loading}
+              onRefresh={fetchEvents}
+            />
+          )
+        ) : viewMode === 'map' ? (
           <View style={styles.mapContainer}>
             <MapView
               provider={PROVIDER_GOOGLE}
@@ -540,25 +780,144 @@ export default function App() {
               initialRegion={{
                 latitude: 51.3758,
                 longitude: -2.3599,
-                latitudeDelta: 0.0922,
-                longitudeDelta: 0.0421,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
               }}
             >
-              {filteredEvents.map(event => (
+              {/* User location marker */}
+              <Marker
+                coordinate={USER_LOCATION}
+                title="You are here"
+                pinColor="#3b82f6"
+              />
+              {filteredEvents.map(event =>
                 event.latitude && event.longitude ? (
                   <Marker
                     key={event.id}
-                    coordinate={{
-                      latitude: event.latitude,
-                      longitude: event.longitude,
-                    }}
-                    title={event.title}
-                    description={event.location}
-                  />
+                    coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+                    pinColor="#ea580c"
+                  >
+                    <Callout tooltip onPress={() => setSelectedEvent(event)}>
+                      <View style={styles.callout}>
+                        <Text style={styles.calloutTitle} numberOfLines={2}>{event.title}</Text>
+                        <Text style={styles.calloutDate}>
+                          {new Date(event.start_time || event.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          {' · '}
+                          {new Date(event.start_time || event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                        <Text style={styles.calloutLocation} numberOfLines={1}>📍 {event.location}</Text>
+                        <Text style={styles.calloutTap}>Tap for details →</Text>
+                      </View>
+                    </Callout>
+                  </Marker>
                 ) : null
-              ))}
+              )}
             </MapView>
+            {/* Events without coords — shown as a bottom sheet count */}
+            {filteredEvents.filter(e => !e.latitude || !e.longitude).length > 0 && (
+              <View style={styles.mapFootnote}>
+                <Text style={styles.mapFootnoteText}>
+                  {filteredEvents.filter(e => !e.latitude || !e.longitude).length} event(s) have no map location — switch to List view to see them all.
+                </Text>
+              </View>
+            )}
           </View>
+        ) : (
+          /* Filter panel — inline, no modal */
+          <ScrollView contentContainerStyle={styles.filterPanel}>
+            <View style={styles.filterPanelHeader}>
+              <Text style={styles.modalTitle}>Filter Events</Text>
+              {activeFilterCount > 0 && (
+                <TouchableOpacity onPress={resetFilters}>
+                  <Text style={styles.clearFiltersText}>Reset all</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Distance from you</Text>
+              <View style={styles.filterOptions}>
+                {[{ label: '100 m', val: 100 }, { label: '500 m', val: 500 }, { label: '1 km', val: 1000 }].map(({ label, val }) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.optionButton, radius === val && styles.optionButtonActive]}
+                    onPress={() => setRadius(radius === val ? null : val)}
+                  >
+                    <Text style={[styles.optionText, radius === val && styles.optionTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>When</Text>
+              <View style={styles.filterOptions}>
+                {[{ label: 'Happening now', val: 'now' }, { label: 'Next 1 hr', val: '1hr' }, { label: 'Next 2 hrs', val: '2hr' }, { label: 'Today', val: 'today' }, { label: 'This week', val: 'week' }].map(({ label, val }) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.optionButton, timeRange === val && styles.optionButtonActive]}
+                    onPress={() => setTimeRange(timeRange === val ? null : val)}
+                  >
+                    <Text style={[styles.optionText, timeRange === val && styles.optionTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Mood</Text>
+              <View style={styles.filterOptions}>
+                {['Energetic', 'Relaxed', 'Social', 'Focused'].map(m => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.optionButton, selectedMoods.includes(m.toLowerCase()) && styles.optionButtonActive]}
+                    onPress={() => toggleMood(m.toLowerCase())}
+                  >
+                    <Text style={[styles.optionText, selectedMoods.includes(m.toLowerCase()) && styles.optionTextActive]}>{m}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Energy level</Text>
+              <View style={styles.filterOptions}>
+                {['High', 'Medium', 'Low'].map(e => (
+                  <TouchableOpacity
+                    key={e}
+                    style={[styles.optionButton, selectedEnergy === e.toLowerCase() && styles.optionButtonActive]}
+                    onPress={() => setSelectedEnergy(selectedEnergy === e.toLowerCase() ? null : e.toLowerCase())}
+                  >
+                    <Text style={[styles.optionText, selectedEnergy === e.toLowerCase() && styles.optionTextActive]}>{e}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Min rating</Text>
+              <View style={styles.filterOptions}>
+                {[{ label: '4.0+', val: 4.0 }, { label: '4.5+', val: 4.5 }].map(({ label, val }) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.optionButton, minRating === val && styles.optionButtonActive]}
+                    onPress={() => setMinRating(minRating === val ? null : val)}
+                  >
+                    <Text style={[styles.optionText, minRating === val && styles.optionTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setViewMode('list')}
+            >
+              <Text style={styles.closeButtonText}>
+                Show {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         )
       ) : currentTab === 'friends' ? (
         <FlatList
@@ -630,7 +989,7 @@ const styles = StyleSheet.create({
   },
   userRole: {
     fontSize: 12,
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     marginTop: 2,
   },
@@ -639,7 +998,7 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     borderWidth: 2,
-    borderColor: '#a855f7',
+    borderColor: '#ea580c',
   },
   headerTitle: {
     fontSize: 24,
@@ -647,19 +1006,45 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   controls: {
+    flexDirection: 'column',
+    gap: 6,
+  },
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    paddingHorizontal: 10,
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: 6,
+    color: '#999',
   },
   searchBar: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 10,
-    borderRadius: 8,
-    fontSize: 16,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#1a1a1a',
+  },
+  searchClearButton: {
+    padding: 4,
+  },
+  searchClearText: {
+    fontSize: 14,
+    color: '#999',
+    fontWeight: '600',
+  },
+  searchResultCount: {
+    fontSize: 12,
+    color: '#ea580c',
+    fontWeight: '600',
+    paddingHorizontal: 2,
   },
   viewToggle: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
     padding: 10,
     borderRadius: 8,
   },
@@ -706,7 +1091,7 @@ const styles = StyleSheet.create({
   },
   organizer: {
     fontSize: 14,
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     marginBottom: 12,
   },
@@ -723,20 +1108,20 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#a855f7',
+    borderColor: '#ea580c',
   },
   calendarButtonText: {
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     fontSize: 12,
   },
   price: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#a855f7',
+    color: '#ea580c',
   },
   rsvpButton: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
@@ -751,17 +1136,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   retry: {
-    color: '#a855f7',
+    color: '#ea580c',
     textDecorationLine: 'underline',
-  },
-  filterButton: {
-    backgroundColor: '#f0f0f0',
-    padding: 10,
-    borderRadius: 8,
-  },
-  filterButtonText: {
-    color: '#333',
-    fontWeight: '600',
   },
   modalContainer: {
     flex: 1,
@@ -804,8 +1180,8 @@ const styles = StyleSheet.create({
     borderColor: '#eee',
   },
   optionButtonActive: {
-    backgroundColor: '#a855f7',
-    borderColor: '#a855f7',
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c',
   },
   optionText: {
     color: '#666',
@@ -815,7 +1191,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   closeButton: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -883,7 +1259,7 @@ const styles = StyleSheet.create({
   },
   tabItemActive: {
     borderTopWidth: 2,
-    borderTopColor: '#a855f7',
+    borderTopColor: '#ea580c',
   },
   tabText: {
     color: '#666',
@@ -891,7 +1267,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabTextActive: {
-    color: '#a855f7',
+    color: '#ea580c',
   },
   friendCard: {
     flexDirection: 'row',
@@ -932,7 +1308,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   messageButtonText: {
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     fontSize: 12,
   },
@@ -949,13 +1325,13 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     marginBottom: 10,
     borderWidth: 3,
-    borderColor: '#a855f7',
+    borderColor: '#ea580c',
   },
   editAvatarButton: {
     padding: 8,
   },
   editAvatarText: {
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
   },
   profileInfo: {
@@ -977,14 +1353,15 @@ const styles = StyleSheet.create({
   },
   profileRole: {
     fontSize: 14,
-    color: '#a855f7',
+    color: '#ea580c',
     fontWeight: '600',
     textAlign: 'center',
+    marginBottom: 4,
+  },
   profileEmail: {
     fontSize: 14,
     color: '#888',
-    marginBottom: 20
-  },
+    textAlign: 'center',
     marginBottom: 20,
   },
   infoSection: {
@@ -1022,7 +1399,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   editProfileButton: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -1080,7 +1457,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   saveButton: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#ea580c',
   },
   saveButtonDisabled: {
     backgroundColor: '#94a3b8',
@@ -1092,5 +1469,318 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: '#fff',
+  },
+  // ── Segmented control ──────────────────────────────────────────────────────
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+    marginTop: 12,
+    padding: 3,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  segmentButtonActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#888',
+  },
+  segmentTextActive: {
+    color: '#ea580c',
+  },
+  // ── Map callout ────────────────────────────────────────────────────────────
+  callout: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    width: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  calloutTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  calloutDate: {
+    fontSize: 12,
+    color: '#ea580c',
+    marginBottom: 2,
+  },
+  calloutLocation: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 6,
+  },
+  calloutTap: {
+    fontSize: 11,
+    color: '#ea580c',
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  // ── Map footnote ───────────────────────────────────────────────────────────
+  mapFootnote: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  mapFootnoteText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  // ── Empty state ────────────────────────────────────────────────────────────
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  clearFiltersText: {
+    color: '#ea580c',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  // ── Inline filter panel ────────────────────────────────────────────────────
+  filterPanel: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  filterPanelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  // ── Event detail modal ─────────────────────────────────────────────────────
+  modalDate: {
+    fontSize: 14,
+    color: '#ea580c',
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  modalLocation: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
+  },
+  modalOrganizer: {
+    fontSize: 14,
+    color: '#ea580c',
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: '#444',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  modalActions: {
+    gap: 10,
+    marginTop: 8,
+  },
+  modalSecondaryButton: {
+    borderWidth: 1.5,
+    borderColor: '#ea580c',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalSecondaryButtonText: {
+    color: '#ea580c',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  modalCloseX: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseXText: {
+    fontSize: 18,
+    color: '#666',
+  },
+  // ── Follow chip on event card ──────────────────────────────────────────────
+  organizerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  followChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#ea580c',
+  },
+  followChipActive: {
+    backgroundColor: '#ea580c',
+  },
+  followChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ea580c',
+  },
+  followChipTextActive: {
+    color: '#fff',
+  },
+  // ── Profile stats row ──────────────────────────────────────────────────────
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statNumber: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#eee',
+  },
+  // ── Profile sub-tabs ───────────────────────────────────────────────────────
+  profileTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 16,
+  },
+  profileTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  profileTabBtnActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  profileTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#888',
+  },
+  profileTabTextActive: {
+    color: '#ea580c',
+  },
+  // ── Society card (following list) ─────────────────────────────────────────
+  societyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  societyAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    marginRight: 12,
+  },
+  societyInfo: {
+    flex: 1,
+  },
+  societyName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+  },
+  societyDesc: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  societyEvents: {
+    fontSize: 12,
+    color: '#ea580c',
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  unfollowButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#ccc',
+  },
+  unfollowButtonText: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '600',
+  },
+  emptyStateSubText: {
+    fontSize: 13,
+    color: '#aaa',
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 20,
   },
 });

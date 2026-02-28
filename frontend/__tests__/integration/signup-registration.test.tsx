@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import SignupPage from '../../app/signup/page'
 import { signup } from '../../lib/auth'
+import type { AuthResponse } from '@supabase/supabase-js'
 
 const mockPush = jest.fn()
 
@@ -54,9 +55,9 @@ describe('test_NFR08_user_registration - Signup Page', () => {
 
   it('AC1: calls auth.signup with email, password, and metadata on form submit', async () => {
     mockSignup.mockResolvedValue({
-      data: { user: { id: 'u1', identities: [{ id: 'i1' }] } as any, session: null },
+      data: { user: { id: 'u1', identities: [{ id: 'i1' }] } as unknown as AuthResponse['data']['user'], session: null },
       error: null,
-    })
+    } as AuthResponse)
 
     fillFormAndSubmit()
 
@@ -67,24 +68,26 @@ describe('test_NFR08_user_registration - Signup Page', () => {
     })
   })
 
-  it('AC1: redirects to /dashboard on successful signup', async () => {
+  it('AC1: shows email confirmation screen on successful signup', async () => {
     mockSignup.mockResolvedValue({
-      data: { user: { id: 'u1', identities: [{ id: 'i1' }] } as any, session: null },
+      data: { user: { id: 'u1', identities: [{ id: 'i1' }] } as unknown as AuthResponse['data']['user'], session: null },
       error: null,
-    })
+    } as AuthResponse)
 
     fillFormAndSubmit()
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/dashboard')
+      expect(screen.getByText('Check your email')).toBeInTheDocument()
+      expect(screen.getByText(/We sent a confirmation link to/i)).toBeInTheDocument()
     })
+    expect(mockPush).not.toHaveBeenCalled()
   })
 
   it('AC2: shows duplicate email error from Supabase error response', async () => {
     mockSignup.mockResolvedValue({
       data: { user: null, session: null },
-      error: { message: 'User already registered', name: 'AuthApiError', status: 400 } as any,
-    })
+      error: { message: 'User already registered', name: 'AuthApiError', status: 400 } as unknown as AuthResponse['error'],
+    } as AuthResponse)
 
     fillFormAndSubmit()
 
@@ -96,9 +99,9 @@ describe('test_NFR08_user_registration - Signup Page', () => {
 
   it('AC2: shows duplicate email error from empty identities', async () => {
     mockSignup.mockResolvedValue({
-      data: { user: { id: 'u1', identities: [] } as any, session: null },
+      data: { user: { id: 'u1', identities: [] } as unknown as AuthResponse['data']['user'], session: null },
       error: null,
-    })
+    } as AuthResponse)
 
     fillFormAndSubmit()
 

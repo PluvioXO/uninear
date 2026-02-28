@@ -55,11 +55,11 @@ class UniNearBackend:
 
     def setup_middleware(self):
         origins = [
+            "https://uninear-gvjz.vercel.app",
             "http://localhost:3000",
             "http://127.0.0.1:3000",
             "http://localhost:8081",
             "http://127.0.0.1:8081",
-            "*" # TODO: Remove wildcard before production — restrict to specific origins only
         ]
         self.app.add_middleware(
             CORSMiddleware,

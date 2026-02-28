@@ -16,6 +16,8 @@ class EventCreateSchema(BaseModel):
     mood_tags: List[str] = []
     energy_level: Optional[str] = None
     organiser_id: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 class EventUpdateSchema(BaseModel):
     title: Optional[str] = None
@@ -25,6 +27,8 @@ class EventUpdateSchema(BaseModel):
     capacity: Optional[int] = None
     status: Optional[str] = None
     organizer: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 class UserSignupSchema(BaseModel):
     email: str

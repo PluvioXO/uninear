@@ -53,6 +53,10 @@ jobs:
   test-frontend:
     name: Frontend Tests (Next.js)
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      NEXT_PUBLIC_API_URL: https://uninear-gvjz.vercel.app
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js 20
@@ -70,13 +74,17 @@ jobs:
       - name: Lint
         working-directory: ./frontend
         run: npm run lint
-      - name: Test
+      - name: Run all tests
         working-directory: ./frontend
         run: npm run test
 
-  test-services:
-    name: Service Tests (Supabase, Redis, Notifications)
+  test-frontend-integration:
+    name: Frontend Integration Tests
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      NEXT_PUBLIC_API_URL: https://uninear-gvjz.vercel.app
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js 20
@@ -88,7 +96,28 @@ jobs:
       - name: Install dependencies
         working-directory: ./frontend
         run: npm ci
-      - name: Run Service Tests
+      - name: Run integration tests
+        working-directory: ./frontend
+        run: npx jest __tests__/integration
+
+  test-services:
+    name: Service Tests (Auth, Supabase, Redis, Notifications)
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+      - name: Run service tests
         working-directory: ./frontend
         run: npx jest __tests__/services
 

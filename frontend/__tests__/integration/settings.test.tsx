@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import SettingsPage from '../../app/dashboard/settings/page'
+import { logout } from '../../lib/auth'
 
 // Mock MagneticButton
 jest.mock('../../components/MagneticButton', () => {
@@ -8,13 +9,18 @@ jest.mock('../../components/MagneticButton', () => {
   }
 })
 
+// Mock auth so logout() doesn't throw in tests
+jest.mock('../../lib/auth', () => ({
+  logout: jest.fn(),
+}))
+
 describe('Settings Page', () => {
   it('renders the sidebar tabs', () => {
     render(<SettingsPage />)
     expect(screen.getByText('General')).toBeInTheDocument()
     expect(screen.getByText('Notifications')).toBeInTheDocument()
     expect(screen.getByText('Team Members')).toBeInTheDocument()
-    expect(screen.getByText('Billing & Plan')).toBeInTheDocument()
+    expect(screen.queryByText('Billing & Plan')).not.toBeInTheDocument()
   })
 
   it('defaults to the General tab', () => {
@@ -37,10 +43,10 @@ describe('Settings Page', () => {
     expect(screen.getByText('Alex Thompson')).toBeInTheDocument()
   })
 
-  it('switches to Billing tab', () => {
+  it('calls logout when Sign Out is clicked', () => {
+    const mockedLogout = logout as jest.MockedFunction<typeof logout>
     render(<SettingsPage />)
-    fireEvent.click(screen.getByText('Billing & Plan'))
-    expect(screen.getByText('Plan & Billing')).toBeInTheDocument()
-    expect(screen.getByText('Pro Society')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Sign Out'))
+    expect(mockedLogout).toHaveBeenCalled()
   })
 })

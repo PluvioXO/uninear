@@ -1,31 +1,8 @@
 'use client';
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { getSupabase } from '@/lib/supabase';
 
 const TOKEN_KEYS = ['access_token', 'token', 'refresh_token'];
-
-let supabaseClient: SupabaseClient | null = null;
-
-const getSupabaseClient = (): SupabaseClient => {
-  if (supabaseClient) return supabaseClient;
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase environment variables.');
-  }
-
-  supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
-
-  return supabaseClient;
-};
 
 export const clearAuthToken = (): void => {
   if (typeof window === 'undefined') return;
@@ -46,9 +23,7 @@ export const signup = async (
   password: string,
   options?: SignupOptions,
 ) => {
-  const supabase = getSupabaseClient();
-
-  return supabase.auth.signUp({
+  return getSupabase().auth.signUp({
     email,
     password,
     options: {
@@ -59,15 +34,11 @@ export const signup = async (
 };
 
 export const login = async (email: string, password: string) => {
-  const supabase = getSupabaseClient();
-
-  return supabase.auth.signInWithPassword({ email, password });
+  return getSupabase().auth.signInWithPassword({ email, password });
 };
 
 export const logout = async (): Promise<void> => {
-  const supabase = getSupabaseClient();
-
-  await supabase.auth.signOut();
+  await getSupabase().auth.signOut();
   clearAuthToken();
 
   if (typeof window !== 'undefined') {
@@ -78,8 +49,7 @@ export const logout = async (): Promise<void> => {
 export const getToken = async (): Promise<string | null> => {
   if (typeof window === 'undefined') return null;
 
-  const supabase = getSupabaseClient();
-  const { data } = await supabase.auth.getSession();
+  const { data } = await getSupabase().auth.getSession();
 
   if (data.session?.access_token) {
     return data.session.access_token;
