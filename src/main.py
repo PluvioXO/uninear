@@ -162,6 +162,9 @@ class UniNearBackend:
                 event_data['start_time'] = event_data.pop('date').isoformat()
             event_data['organiser_id'] = user['user_id']
 
+            # Use admin client to bypass RLS insert policy (the anon-key client
+            # cannot insert into events because the RLS policy restricts inserts
+            # to the service_role). Auth is still enforced via the JWT dependency.
             db = self.db.admin or self.db.client
             response = db.table("events").insert(event_data).execute()
             return response.data[0]

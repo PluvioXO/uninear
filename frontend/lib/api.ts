@@ -35,7 +35,7 @@ export async function createEvent(data: {
   date: string;
   location: string;
   capacity: number;
-  organizer: string;
+  organizer?: string;
   status?: string;
   mood_tags?: string[];
   energy_level?: string;

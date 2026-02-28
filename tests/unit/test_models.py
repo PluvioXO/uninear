@@ -25,17 +25,16 @@ def test_event_create_schema_missing_required():
     """Test that EventCreateSchema raises error when required fields are missing."""
     data = {
         "title": "Test Event"
-        # Missing date, location, capacity, organizer
+        # Missing date, location, capacity
     }
     with pytest.raises(ValidationError) as excinfo:
         EventCreateSchema(**data)
-    
+
     errors = excinfo.value.errors()
     missing_fields = [err['loc'][0] for err in errors]
     assert "date" in missing_fields
     assert "location" in missing_fields
     assert "capacity" in missing_fields
-    assert "organizer" in missing_fields 
 
 def test_event_create_schema_invalid_types():
     """Test that EventCreateSchema raises error for invalid data types."""

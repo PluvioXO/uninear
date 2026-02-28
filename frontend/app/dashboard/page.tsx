@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
 import { createEvent } from '@/lib/api';
@@ -197,7 +197,6 @@ export default function DashboardPage() {
     showPastEvents ? e.status === 'Past' : e.status !== 'Past'
   );
 
-  // TODO: Make sure organisers is derived from session
   async function handleCreateEvent(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setCreateError(null);
@@ -209,7 +208,6 @@ export default function DashboardPage() {
       date: new Date(formData.get('date') as string).toISOString(),
       location: formData.get('location') as string,
       capacity: Number(formData.get('capacity')),
-      organizer: 'Tech Society',
       status: 'Draft',
       mood_tags: (formData.get('moods') as string).split(',').map(s => s.trim()),
       energy_level: formData.get('energy') as string,
