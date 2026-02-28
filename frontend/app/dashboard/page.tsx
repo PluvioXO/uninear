@@ -80,6 +80,25 @@ export default function DashboardPage() {
     ? Math.round(events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100)
     : 0;
 
+  const handleCreateEvent = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const newEvent: Event = {
+      id: Date.now(),
+      title: formData.get('title') as string,
+      date: formData.get('date') as string,
+      location: formData.get('location') as string,
+      attendees: 0,
+      capacity: Number(formData.get('capacity')),
+      status: 'Draft',
+      moods: (formData.get('moods') as string).split(',').map(s => s.trim()),
+      energy: formData.get('energy') as 'Low' | 'Medium' | 'High',
+      length: formData.get('length') as string
+    };
+    setEvents([...events, newEvent]);
+    setIsCreateModalOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden">
       {/* Dashboard Navigation */}
