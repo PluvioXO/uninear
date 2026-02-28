@@ -182,6 +182,8 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   // Derived state for statistics
   const totalMembers = 1248; // Static for now
@@ -198,6 +200,9 @@ export default function DashboardPage() {
   // TODO: Make sure organisers is derived from session
   async function handleCreateEvent(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setCreateError(null);
+    setIsCreating(true);
+
     const formData = new FormData(e.currentTarget);
     const payload = {
       title: formData.get('title') as string,
@@ -210,23 +215,33 @@ export default function DashboardPage() {
       energy_level: formData.get('energy') as string,
     };
 
-    const res = await createEvent(payload);
-    if (!res.ok) return;
+    try {
+      const res = await createEvent(payload);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setCreateError(body?.detail ?? 'Failed to create event. Please try again.');
+        return;
+      }
 
-    const created = await res.json();
-    setEvents(prev => [...prev, {
-      id: created.id,
-      title: created.title,
-      date: created.date,
-      location: created.location,
-      attendees: 0,
-      capacity: created.capacity,
-      status: created.status,
-      moods: created.mood_tags,
-      energy: created.energy_level,
-      length: formData.get('length') as string,
-    }]);
-    setIsCreateModalOpen(false);
+      const created = await res.json();
+      setEvents(prev => [...prev, {
+        id: created.id,
+        title: created.title,
+        date: created.date,
+        location: created.location,
+        attendees: 0,
+        capacity: created.capacity,
+        status: created.status,
+        moods: created.mood_tags,
+        energy: created.energy_level,
+        length: formData.get('length') as string,
+      }]);
+      setIsCreateModalOpen(false);
+    } catch {
+      setCreateError('Network error. Please check your connection.');
+    } finally {
+      setIsCreating(false);
+    }
   }
 
   const pastEvents = events.filter(e => e.status === 'Past').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -307,12 +322,16 @@ export default function DashboardPage() {
                     <input name="moods" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Social, Fun" />
                   </div>
                 </div>
+                {createError && (
+                  <p className="text-red-600 text-sm">{createError}</p>
+                )}
                 <div className="pt-4">
                   <MagneticButton
-                    label="Create Event"
-                    className="w-full bg-gray-900 text-white justify-center"
+                    label={isCreating ? 'Creating...' : 'Create Event'}
+                    className="w-full bg-gray-900 text-white justify-center disabled:opacity-50"
                     accentClassName="from-orange-400 via-amber-400 to-yellow-400"
                     type="submit"
+                    disabled={isCreating}
                   />
                 </div>
               </form>

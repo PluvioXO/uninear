@@ -75,7 +75,7 @@ class UniNearBackend:
 
         # Protected endpoints (require valid JWT)
         auth = [Depends(verify_token)]
-        self.app.post("/events")(self.create_event)
+        self.app.post("/events", dependencies=auth)(self.create_event)
         self.app.delete("/events/{event_id}", dependencies=auth)(self.delete_event)
         self.app.patch("/events/{event_id}", dependencies=auth)(self.update_event)
         self.app.post("/api/rsvp", status_code=201, dependencies=auth)(self.create_rsvp)
