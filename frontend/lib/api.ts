@@ -29,3 +29,20 @@ export async function apiFetch(
     headers,
   });
 }
+
+export async function createEvent(data: {
+  title: string;
+  date: string;
+  location: string;
+  capacity: number;
+  organizer: string;
+  status?: string;
+  mood_tags?: string[];
+  energy_level?: string;
+  description?: string;
+}): Promise<Response> {
+  return apiFetch('/events', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}

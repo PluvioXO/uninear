@@ -75,7 +75,7 @@ class UniNearBackend:
 
         # Protected endpoints (require valid JWT)
         auth = [Depends(verify_token)]
-        self.app.post("/events", dependencies=auth)(self.create_event)
+        self.app.post("/events")(self.create_event)
         self.app.delete("/events/{event_id}", dependencies=auth)(self.delete_event)
         self.app.patch("/events/{event_id}", dependencies=auth)(self.update_event)
         self.app.post("/api/rsvp", status_code=201, dependencies=auth)(self.create_rsvp)
@@ -155,13 +155,15 @@ class UniNearBackend:
                 }
             ]
 
-    def create_event(self, event: EventCreateSchema):
+    def create_event(self, event: EventCreateSchema, user: Dict[str, Any] = Depends(verify_token)):
         try:
             event_data = event.model_dump(exclude_none=True)
             if 'date' in event_data:
                 event_data['start_time'] = event_data.pop('date').isoformat()
-            
-            response = self.db.client.table("events").insert(event_data).execute()
+            event_data['organiser_id'] = user['user_id']
+
+            db = self.db.admin or self.db.client
+            response = db.table("events").insert(event_data).execute()
             return response.data[0]
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
