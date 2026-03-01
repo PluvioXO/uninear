@@ -36,6 +36,7 @@ export async function fetchEvents(params?: {
   lng?: number;
   radius_m?: number;
   time_filter?: '2hr' | 'today' | 'week';
+  search?: string;
 }): Promise<EventResponse[]> {
   let url = `${API_BASE_URL}/events`;
   const qs = new URLSearchParams();
@@ -46,6 +47,9 @@ export async function fetchEvents(params?: {
   }
   if (params?.time_filter) {
     qs.set('time_filter', params.time_filter);
+  }
+  if (params?.search) {
+    qs.set('search', params.search);
   }
   const qsStr = qs.toString();
   if (qsStr) {

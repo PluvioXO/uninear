@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import DashboardPage from '../../app/dashboard/page'
 
 // Mock the components used in DashboardPage
@@ -429,6 +429,135 @@ describe('FR-02: Location/Radius Filter', () => {
       const activeEventsLabel = screen.getByText('Active Events')
       const card = activeEventsLabel.closest('div.border') as HTMLElement
       expect(within(card).getByText('1')).toBeInTheDocument()
+    })
+  })
+})
+
+// --- FR-07: Keyword Search Tests ---
+
+describe('FR-07: Keyword Search', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+  })
+
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  it('test_FR07_keyword_search: renders search input', async () => {
+    jest.useRealTimers()
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
+
+    const searchInput = screen.getByTestId('search-input')
+    expect(searchInput).toBeInTheDocument()
+    expect(searchInput).toHaveAttribute('placeholder', 'Search events...')
+  })
+
+  it('test_FR07_keyword_search: search filters results via API', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const searchInput = screen.getByTestId('search-input')
+    fireEvent.change(searchInput, { target: { value: 'hackathon' } })
+
+    // Advance past 300ms debounce
+    act(() => { jest.advanceTimersByTime(300) })
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ search: 'hackathon' })
+    })
+  })
+
+  it('test_FR07_keyword_search: shows "No events match your search" when empty results', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([])
+
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const searchInput = screen.getByTestId('search-input')
+    fireEvent.change(searchInput, { target: { value: 'nonexistent' } })
+
+    act(() => { jest.advanceTimersByTime(300) })
+
+    await waitFor(() => {
+      expect(screen.getByText('No events match your search')).toBeInTheDocument()
+    })
+  })
+
+  it('test_FR07_keyword_search: clearing search restores full event list', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const searchInput = screen.getByTestId('search-input')
+
+    // Type a search term
+    fireEvent.change(searchInput, { target: { value: 'hackathon' } })
+    act(() => { jest.advanceTimersByTime(300) })
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Click clear button
+    const clearBtn = screen.getByTestId('search-clear')
+    fireEvent.click(clearBtn)
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledTimes(3)
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined)
+    })
+  })
+
+  it('test_FR07_keyword_search: Enter key triggers search immediately', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const searchInput = screen.getByTestId('search-input')
+    fireEvent.change(searchInput, { target: { value: 'hackathon' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+
+    // Should trigger immediately without waiting for debounce
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ search: 'hackathon' })
+    })
+  })
+
+  it('test_FR07_keyword_search: search combines with other filters', async () => {
+    jest.useRealTimers()
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    // Set time filter
+    fireEvent.click(screen.getByTestId('time-filter-2hr'))
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Set radius filter
+    const radiusSelect = screen.getByTestId('radius-filter')
+    fireEvent.change(radiusSelect, { target: { value: '500' } })
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(3))
+
+    // Type search and press Enter
+    const searchInput = screen.getByTestId('search-input')
+    fireEvent.change(searchInput, { target: { value: 'coffee' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({
+        lat: 51.3758,
+        lng: -2.3599,
+        radius_m: 500,
+        time_filter: '2hr',
+        search: 'coffee',
+      })
     })
   })
 })

@@ -114,6 +114,7 @@ class UniNearBackend:
         lng: Optional[float] = Query(None, ge=-180, le=180),
         radius_m: Optional[float] = Query(None, gt=0),
         time_filter: Optional[TimeFilter] = Query(None),
+        search: Optional[str] = Query(None),
     ) -> list[dict]:
         try:
             now = datetime.now(timezone.utc)
@@ -127,6 +128,16 @@ class UniNearBackend:
                 .execute()
             )
             events = cast(list[Dict[str, Any]], response.data or [])
+
+            # Apply keyword search filter when provided (post-fetch, consistent
+            # with time/radius filters; Supabase ilike not used to keep pattern uniform)
+            if search:
+                term = search.lower()
+                events = [
+                    e for e in events
+                    if term in (e.get("title") or "").lower()
+                    or term in (e.get("description") or "").lower()
+                ]
 
             # Apply time filter when provided
             if time_filter is not None:

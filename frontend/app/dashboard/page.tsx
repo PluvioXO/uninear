@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import MagneticButton from '@/components/MagneticButton';
@@ -62,12 +62,15 @@ export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [radiusFilter, setRadiusFilter] = useState<number | null>(null);
   const [timeFilter, setTimeFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadEvents = useCallback(async (radius?: number | null, time?: string | null) => {
+  const loadEvents = useCallback(async (radius?: number | null, time?: string | null, search?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const params: { lat?: number; lng?: number; radius_m?: number; time_filter?: string } = {};
+      const params: { lat?: number; lng?: number; radius_m?: number; time_filter?: string; search?: string } = {};
       if (radius != null) {
         params.lat = CAMPUS_LAT;
         params.lng = CAMPUS_LNG;
@@ -75,6 +78,9 @@ export default function DashboardPage() {
       }
       if (time) {
         params.time_filter = time;
+      }
+      if (search) {
+        params.search = search;
       }
       const data = await fetchEvents(Object.keys(params).length > 0 ? params : undefined);
       setEvents(data.map(toEvent));
@@ -85,7 +91,22 @@ export default function DashboardPage() {
     }
   }, []);
 
-  useEffect(() => { loadEvents(radiusFilter, timeFilter); }, [radiusFilter, timeFilter, loadEvents]);
+  useEffect(() => { loadEvents(radiusFilter, timeFilter, activeSearch); }, [radiusFilter, timeFilter, activeSearch, loadEvents]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setActiveSearch(value);
+    }, 300);
+  };
 
   // Derived state for statistics
   const totalMembers = 1248; // Static for now
@@ -240,6 +261,45 @@ export default function DashboardPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Upcoming Events */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Search Bar */}
+            <div className="relative" data-testid="search-bar">
+              <input
+                type="text"
+                data-testid="search-input"
+                aria-label="Search events"
+                placeholder="Search events..."
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    setActiveSearch(searchQuery);
+                  }
+                }}
+                className="w-full bg-white border border-gray-200 rounded-2xl pl-12 pr-10 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm"
+              />
+              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searchQuery && (
+                <button
+                  type="button"
+                  data-testid="search-clear"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setSearchQuery('');
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    setActiveSearch('');
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold flex items-center gap-2 text-gray-900">
                 <span className="w-2 h-2 bg-orange-600 rounded-full"></span>
@@ -328,8 +388,8 @@ export default function DashboardPage() {
             ) : viewMode === 'map' ? (
               <MapView events={events} />
             ) : events.length === 0 ? (
-              <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
-                <p className="text-gray-500">No upcoming events</p>
+              <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm" data-testid="empty-state">
+                <p className="text-gray-500">{activeSearch ? 'No events match your search' : 'No upcoming events'}</p>
               </div>
             ) : <div className="space-y-4">{events.map((event) => (
                 <div key={event.id} className="group border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md hover:border-orange-200 transition-all cursor-pointer">
