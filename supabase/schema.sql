@@ -46,6 +46,23 @@ create index if not exists event_attendance_event_id_idx on public.event_attenda
 create index if not exists event_attendance_user_id_idx on public.event_attendance (user_id);
 
 -- =============================================================================
+-- USER SOCIETY FOLLOWS TABLE
+-- Covers: FR-XX (Follow Societies)
+-- =============================================================================
+create table if not exists public.user_society_follows (
+  id bigserial primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  society_name text not null,
+  created_at timestamptz not null default now(),
+
+  -- Prevents duplicate follows
+  constraint unique_follow unique (user_id, society_name)
+);
+
+create index if not exists user_society_follows_user_id_idx on public.user_society_follows (user_id);
+create index if not exists user_society_follows_society_name_idx on public.user_society_follows (society_name);
+
+-- =============================================================================
 -- ROW LEVEL SECURITY (RLS)
 -- =============================================================================
 
@@ -104,6 +121,27 @@ create policy "Users can cancel own RSVP"
   to authenticated
   using (user_id = auth.uid());
 
+-- User Society Follows: enable RLS
+alter table public.user_society_follows enable row level security;
+
+-- Follows: authenticated users can follow societies
+create policy "Authenticated users can follow societies"
+  on public.user_society_follows for insert
+  to authenticated
+  with check (user_id = auth.uid());
+
+-- Follows: users can view their own follows
+create policy "Users can view own follows"
+  on public.user_society_follows for select
+  to authenticated
+  using (user_id = auth.uid());
+
+-- Follows: users can delete their own follows
+create policy "Users can unfollow societies"
+  on public.user_society_follows for delete
+  to authenticated
+  using (user_id = auth.uid());
+
 -- =============================================================================
 -- RPC FUNCTIONS (atomic counters)
 -- =============================================================================
@@ -141,3 +179,41 @@ begin
   return new_count;
 end;
 $$;
+
+-- =============================================================================
+-- STORAGE BUCKETS
+-- =============================================================================
+
+-- Create profile-pictures bucket if it doesn't exist
+insert into storage.buckets (id, name, public)
+values ('profile-pictures', 'profile-pictures', true)
+on conflict (id) do nothing;
+
+-- Enable RLS on storage.objects for profile pictures
+create policy "Users can upload their own profile pictures"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'profile-pictures'
+    and auth.uid()::text = (string_to_array(name, '_'))[1]
+  );
+
+create policy "Profile pictures are publicly readable"
+  on storage.objects for select
+  using (bucket_id = 'profile-pictures');
+
+create policy "Users can update their own profile pictures"
+  on storage.objects for update
+  to authenticated
+  with check (
+    bucket_id = 'profile-pictures'
+    and auth.uid()::text = (string_to_array(name, '_'))[1]
+  );
+
+create policy "Users can delete their own profile pictures"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'profile-pictures'
+    and auth.uid()::text = (string_to_array(name, '_'))[1]
+  );

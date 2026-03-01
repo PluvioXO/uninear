@@ -85,6 +85,9 @@ class UniNearBackend:
         self.app.delete("/events/{event_id}/rsvp", dependencies=auth)(self.cancel_rsvp)
         self.app.get("/api/rsvp", dependencies=auth)(self.get_rsvps)
         self.app.get("/api/events/{event_id}/rsvps", dependencies=auth)(self.get_event_rsvps)
+        self.app.post("/api/follow", status_code=201, dependencies=auth)(self.follow_society)
+        self.app.delete("/api/follow/{society_name}", dependencies=auth)(self.unfollow_society)
+        self.app.get("/api/follows", dependencies=auth)(self.get_user_follows)
 
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
