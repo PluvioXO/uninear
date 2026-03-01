@@ -168,13 +168,18 @@ class UniNearBackend:
             logging.error(f"Database error fetching events: {e}")
             raise HTTPException(status_code=503, detail="Unable to load events")
 
-    def create_event(self, event: EventCreateSchema):
+    def create_event(self, event: EventCreateSchema, user: Dict[str, Any] = Depends(verify_token)):
         try:
             event_data = event.model_dump(exclude_none=True)
             if 'date' in event_data:
                 event_data['start_time'] = event_data.pop('date').isoformat()
-            
-            response = self.db.client.table("events").insert(event_data).execute()
+            event_data['organiser_id'] = user['user_id']
+
+            # Use admin client to bypass RLS insert policy (the anon-key client
+            # cannot insert into events because the RLS policy restricts inserts
+            # to the service_role). Auth is still enforced via the JWT dependency.
+            db = self.db.admin or self.db.client
+            response = db.table("events").insert(event_data).execute()
             return response.data[0]
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))

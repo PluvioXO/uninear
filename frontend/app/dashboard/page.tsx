@@ -65,19 +65,21 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const loadEvents = useCallback(async (radius?: number | null, time?: string | null, search?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const params: { lat?: number; lng?: number; radius_m?: number; time_filter?: string; search?: string } = {};
+      const params: { lat?: number; lng?: number; radius_m?: number; time_filter?: '2hr' | 'today' | 'week'; search?: string } = {};
       if (radius != null) {
         params.lat = CAMPUS_LAT;
         params.lng = CAMPUS_LNG;
         params.radius_m = radius;
       }
       if (time) {
-        params.time_filter = time;
+        params.time_filter = time as '2hr' | 'today' | 'week';
       }
       if (search) {
         params.search = search;
@@ -116,6 +118,43 @@ export default function DashboardPage() {
     ? Math.round(events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100)
     : 0;
 
+  const handleCreateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsCreating(true);
+    setCreateError(null);
+
+    try {
+      const formData = new FormData(e.currentTarget);
+      const eventData = {
+        title: formData.get('title') as string,
+        date: formData.get('date') as string,
+        location: formData.get('location') as string,
+        capacity: Number(formData.get('capacity')),
+        moods: (formData.get('moods') as string).split(',').map(s => s.trim()),
+        energy: formData.get('energy') as 'Low' | 'Medium' | 'High',
+        length: formData.get('length') as string
+      };
+
+      // TODO: Replace with actual API call
+      // await createEvent(eventData);
+
+      // For now, just add to local state
+      const newEvent: Event = {
+        id: Date.now(),
+        ...eventData,
+        attendees: 0,
+        status: 'Draft'
+      };
+
+      setEvents([...events, newEvent]);
+      setIsCreateModalOpen(false);
+    } catch (error) {
+      setCreateError('Failed to create event. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden">
       {/* Dashboard Navigation */}
@@ -153,24 +192,7 @@ export default function DashboardPage() {
                 ✕
               </button>
               <h2 className="text-2xl font-bold mb-6 text-gray-900">Create New Event</h2>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const newEvent: Event = {
-                  id: Date.now(),
-                  title: formData.get('title') as string,
-                  date: formData.get('date') as string,
-                  location: formData.get('location') as string,
-                  attendees: 0,
-                  capacity: Number(formData.get('capacity')),
-                  status: 'Draft',
-                  moods: (formData.get('moods') as string).split(',').map(s => s.trim()),
-                  energy: formData.get('energy') as 'Low' | 'Medium' | 'High',
-                  length: formData.get('length') as string
-                };
-                setEvents([...events, newEvent]);
-                setIsCreateModalOpen(false);
-              }} className="space-y-4">
+              <form onSubmit={handleCreateEvent} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-500 mb-1">Event Title</label>
                   <input name="title" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Annual Hackathon" />
@@ -209,12 +231,16 @@ export default function DashboardPage() {
                     <input name="moods" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Social, Fun" />
                   </div>
                 </div>
+                {createError && (
+                  <p className="text-red-600 text-sm">{createError}</p>
+                )}
                 <div className="pt-4">
                   <MagneticButton
-                    label="Create Event"
-                    className="w-full bg-gray-900 text-white justify-center"
+                    label={isCreating ? 'Creating...' : 'Create Event'}
+                    className="w-full bg-gray-900 text-white justify-center disabled:opacity-50"
                     accentClassName="from-orange-400 via-amber-400 to-yellow-400"
                     type="submit"
+                    disabled={isCreating}
                   />
                 </div>
               </form>

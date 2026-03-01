@@ -138,18 +138,99 @@ def test_create_event():
         "organizer": "Test Org"
     }
 
-    with patch_auth_valid():
-        with patch.object(backend.db.client, 'table') as mock_table:
-            mock_table.return_value.insert.return_value.execute.return_value = mock_response
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.insert.return_value.execute.return_value = mock_response
 
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
             response = client.post("/events", json=payload, headers=AUTH_HEADER)
 
             assert response.status_code == 200
             assert response.json()["title"] == "New Event"
 
-            # Verify the mock was called correctly
-            mock_table.assert_called_with("events")
-            assert mock_table.return_value.insert.called
+            mock_admin.table.assert_called_with("events")
+            assert mock_admin.table.return_value.insert.called
+
+
+# 3b. test_FR09_create_event_sets_organiser_id — organiser_id derived from JWT
+def test_FR09_create_event_sets_organiser_id():
+    """Event creation sets organiser_id from the authenticated user's JWT."""
+    mock_response = MagicMock()
+    mock_response.data = [{"id": 2, "title": "My Event", "organiser_id": MOCK_USER_ID}]
+
+    payload: dict[str, Any] = {
+        "title": "My Event",
+        "date": "2025-12-01T10:00:00",
+        "location": "Hall B",
+        "capacity": 30,
+    }
+
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.insert.return_value.execute.return_value = mock_response
+
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
+            response = client.post("/events", json=payload, headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+
+            # Verify organiser_id was included in the insert payload
+            inserted_data = mock_admin.table.return_value.insert.call_args[0][0]
+            assert inserted_data["organiser_id"] == MOCK_USER_ID
+
+
+# 3c. test_FR09_create_event_missing_required_fields — validation rejects incomplete payload
+def test_FR09_create_event_missing_required_fields():
+    """Event creation without required fields returns 422 validation error."""
+    payload: dict[str, Any] = {
+        "title": "Incomplete Event"
+        # Missing date, location, capacity
+    }
+
+    with patch_auth_valid():
+        response = client.post("/events", json=payload, headers=AUTH_HEADER)
+        assert response.status_code == 422
+
+
+# 3d. test_FR09_create_event_defaults_to_draft — status defaults to Draft
+def test_FR09_create_event_defaults_to_draft():
+    """Event creation without explicit status defaults to 'Draft'."""
+    mock_response = MagicMock()
+    mock_response.data = [{"id": 3, "title": "Draft Event", "status": "Draft"}]
+
+    payload: dict[str, Any] = {
+        "title": "Draft Event",
+        "date": "2025-12-01T10:00:00",
+        "location": "Room C",
+        "capacity": 20,
+    }
+
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.insert.return_value.execute.return_value = mock_response
+
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
+            response = client.post("/events", json=payload, headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+
+            inserted_data = mock_admin.table.return_value.insert.call_args[0][0]
+            assert inserted_data["status"] == "Draft"
+
+
+# 3e. test_FR09_create_event_unauthenticated — no token returns 401
+def test_FR09_create_event_unauthenticated():
+    """Event creation without auth token returns 401."""
+    payload: dict[str, Any] = {
+        "title": "Unauth Event",
+        "date": "2025-12-01T10:00:00",
+        "location": "Room D",
+        "capacity": 10,
+    }
+
+    response = client.post("/events", json=payload)
+    assert response.status_code == 401
+
 
 # 4. Test Delete Event
 def test_delete_event():
@@ -589,9 +670,11 @@ def test_NFR10_valid_token_allows_request():
         "organizer": "Test Org"
     }
 
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.insert.return_value.execute.return_value = mock_response
+
     with patch_auth_valid():
-        with patch.object(backend.db.client, 'table') as mock_table:
-            mock_table.return_value.insert.return_value.execute.return_value = mock_response
+        with patch.object(backend.db, 'admin', mock_admin):
             response = client.post("/events", json=payload, headers=AUTH_HEADER)
             assert response.status_code == 200
 
