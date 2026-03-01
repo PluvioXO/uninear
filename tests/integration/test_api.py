@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
@@ -824,3 +825,458 @@ def test_NFR01_event_list_performance():
 
         assert response.status_code == 200
         assert elapsed < 2.0, f"GET /events took {elapsed:.3f}s, exceeds 2s NFR-01 limit"
+
+
+# --- FR-02: Location/Radius Filter Tests ---
+
+def test_FR02_location_filter_returns_nearby_events():
+    """GET /events?lat=...&lng=...&radius_m=... returns only events within radius."""
+    # Bath campus center: 51.3758, -2.3599
+    # Event A: ~100m away (very close)
+    # Event B: ~5000m away (far)
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Nearby Event", "description": "Close",
+         "location": "Student Union", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+        {"id": 2, "title": "Far Event", "description": "Far away",
+         "location": "Remote Building", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.4200, "longitude": -2.3000},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"lat": 51.3758, "lng": -2.3599, "radius_m": 500})
+        assert response.status_code == 200
+        body = response.json()
+        # Only the nearby event should be returned (within 500m)
+        assert len(body) == 1
+        assert body[0]["title"] == "Nearby Event"
+
+
+def test_FR02_location_filter_without_radius_returns_all():
+    """GET /events without radius params returns all events (no filter)."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Event A", "description": "Test",
+         "location": "Hall A", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+        {"id": 2, "title": "Event B", "description": "Test",
+         "location": "Hall B", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.4200, "longitude": -2.3000},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events")
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 2
+
+
+def test_FR02_location_filter_excludes_events_without_coordinates():
+    """Events without lat/lng are excluded when radius filter is active."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Has Coords", "description": "Test",
+         "location": "Hall", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+        {"id": 2, "title": "No Coords", "description": "Test",
+         "location": "Unknown", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"lat": 51.3758, "lng": -2.3599, "radius_m": 500})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "Has Coords"
+
+
+def test_FR02_location_filter_invalid_lat_returns_422():
+    """Invalid latitude (>90) returns 422 validation error."""
+    response = client.get("/events", params={"lat": 999, "lng": -2.3599, "radius_m": 500})
+    assert response.status_code == 422
+
+
+def test_FR02_location_filter_negative_radius_returns_422():
+    """Negative radius returns 422 validation error."""
+    response = client.get("/events", params={"lat": 51.3758, "lng": -2.3599, "radius_m": -1})
+    assert response.status_code == 422
+
+
+# --- FR-03: Time Filter Tests ---
+
+def test_FR03_time_filter_2hr():
+    """GET /events?time_filter=2hr returns only events starting within the next 2 hours."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    soon = (now + timedelta(hours=1)).isoformat()       # within 2hr
+    later = (now + timedelta(hours=5)).isoformat()       # outside 2hr
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Soon Event", "description": "Test",
+         "location": "Hall A", "start_time": soon,
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Later Event", "description": "Test",
+         "location": "Hall B", "start_time": later,
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"time_filter": "2hr"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "Soon Event"
+
+
+def test_FR03_time_filter_today():
+    """GET /events?time_filter=today returns only events happening today."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    # Event starting in 1 hour (today)
+    today_event_time = (now + timedelta(hours=1)).isoformat()
+    # Event starting in 3 days (not today)
+    future_event_time = (now + timedelta(days=3)).isoformat()
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Today Event", "description": "Test",
+         "location": "Hall A", "start_time": today_event_time,
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Future Event", "description": "Test",
+         "location": "Hall B", "start_time": future_event_time,
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"time_filter": "today"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "Today Event"
+
+
+def test_FR03_time_filter_week():
+    """GET /events?time_filter=week returns events within the next 7 days."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    this_week = (now + timedelta(days=3)).isoformat()
+    next_month = (now + timedelta(days=30)).isoformat()
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "This Week Event", "description": "Test",
+         "location": "Hall A", "start_time": this_week,
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Next Month Event", "description": "Test",
+         "location": "Hall B", "start_time": next_month,
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"time_filter": "week"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "This Week Event"
+
+
+def test_FR03_time_filter_no_filter_returns_all():
+    """GET /events without time_filter returns all future events."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Event A", "description": "Test",
+         "location": "Hall A", "start_time": (now + timedelta(hours=1)).isoformat(),
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Event B", "description": "Test",
+         "location": "Hall B", "start_time": (now + timedelta(days=30)).isoformat(),
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events")
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 2
+
+
+def test_FR03_time_filter_combined_with_radius():
+    """GET /events?time_filter=2hr&lat=...&lng=...&radius_m=... applies BOTH filters."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    soon = (now + timedelta(hours=1)).isoformat()
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Nearby Soon", "description": "Test",
+         "location": "Hall A", "start_time": soon,
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+        {"id": 2, "title": "Far Soon", "description": "Test",
+         "location": "Hall B", "start_time": soon,
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.4200, "longitude": -2.3000},
+        {"id": 3, "title": "Nearby Later", "description": "Test",
+         "location": "Hall C", "start_time": (now + timedelta(hours=5)).isoformat(),
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={
+            "time_filter": "2hr",
+            "lat": 51.3758, "lng": -2.3599, "radius_m": 500
+        })
+        assert response.status_code == 200
+        body = response.json()
+        # Only "Nearby Soon" should pass both filters
+        assert len(body) == 1
+        assert body[0]["title"] == "Nearby Soon"
+
+
+def test_FR03_time_filter_invalid_value_returns_422():
+    """GET /events?time_filter=invalid returns 422 validation error."""
+    response = client.get("/events", params={"time_filter": "invalid"})
+    assert response.status_code == 422
+
+
+# --- FR-07: Keyword Search Tests ---
+
+def test_FR07_keyword_search():
+    """GET /events?search=coffee returns events with 'coffee' in title or description (AC-1)."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Coffee Morning", "description": "Free coffee for students",
+         "location": "Cafe", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 30, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Hackathon", "description": "Build cool stuff",
+         "location": "Lab", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 20, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"search": "coffee"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "Coffee Morning"
+
+
+def test_FR07_keyword_search_description():
+    """GET /events?search=cool returns events with 'cool' in description (AC-1)."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Coffee Morning", "description": "Free coffee for students",
+         "location": "Cafe", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 30, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Hackathon", "description": "Build cool stuff",
+         "location": "Lab", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 20, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"search": "cool"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "Hackathon"
+
+
+def test_FR07_keyword_search_case_insensitive():
+    """GET /events?search=COFFEE matches case-insensitively in title and description (AC-1)."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Coffee Morning", "description": "Free coffee",
+         "location": "Cafe", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 30, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "SPORTS DAY", "description": "COMPETITIVE GAMES",
+         "location": "Field", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 200, "attendee_count": 50, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        # Uppercase search matches mixed-case title
+        response = client.get("/events", params={"search": "COFFEE"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "Coffee Morning"
+
+        # Lowercase search matches uppercase title
+        response = client.get("/events", params={"search": "sports"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "SPORTS DAY"
+
+        # Lowercase search matches uppercase description
+        response = client.get("/events", params={"search": "competitive"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "SPORTS DAY"
+
+
+def test_FR07_keyword_search_no_results():
+    """GET /events?search=xyz returns empty list when no matches (AC-2)."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Coffee Morning", "description": "Free coffee",
+         "location": "Cafe", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 30, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"search": "xyz"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 0
+
+
+def test_FR07_keyword_search_cleared_returns_all():
+    """GET /events without search param returns all events (AC-3)."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Event A", "description": "Desc A",
+         "location": "Hall", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Event B", "description": "Desc B",
+         "location": "Lab", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events")
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 2
+
+
+def test_FR07_keyword_search_combined_with_filters():
+    """GET /events?search=coffee&time_filter=2hr&lat=...&lng=...&radius_m=... applies all filters (AC-1,2,3)."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    soon = (now + timedelta(hours=1)).isoformat()
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Coffee Nearby Soon", "description": "Great coffee",
+         "location": "Cafe", "start_time": soon,
+         "capacity": 30, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+        {"id": 2, "title": "Coffee Far", "description": "Also coffee",
+         "location": "Remote", "start_time": soon,
+         "capacity": 30, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.4200, "longitude": -2.3000},
+        {"id": 3, "title": "Hackathon Nearby", "description": "Coding event",
+         "location": "Lab", "start_time": soon,
+         "capacity": 100, "attendee_count": 20, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={
+            "search": "coffee",
+            "time_filter": "2hr",
+            "lat": 51.3758, "lng": -2.3599, "radius_m": 500
+        })
+        assert response.status_code == 200
+        body = response.json()
+        # Only "Coffee Nearby Soon" passes all three filters
+        assert len(body) == 1
+        assert body[0]["title"] == "Coffee Nearby Soon"
+
+
+def test_FR02_location_filter_partial_params_ignored():
+    """If only lat is provided (no lng/radius_m), filter is not applied — all events returned."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Event A", "description": "Test",
+         "location": "Hall A", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"lat": 51.3758})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1  # All events returned (no filtering)

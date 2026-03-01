@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import DashboardPage from '../../app/dashboard/page'
 
 // Mock the components used in DashboardPage
@@ -219,6 +219,345 @@ describe('NFR-14: Event API Integration', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Recovered Event')).toBeInTheDocument()
+    })
+  })
+})
+
+// --- FR-03: Time Filter Tests ---
+
+describe('FR-03: Time Filter', () => {
+  it('test_FR03_time_filter: renders time filter chips with default "All" selected', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
+
+    const timeFilter = screen.getByTestId('time-filter')
+    expect(timeFilter).toBeInTheDocument()
+
+    // "All" button should have active styling (bg-white)
+    const allBtn = screen.getByTestId('time-filter-all')
+    expect(allBtn).toHaveClass('bg-white')
+
+    // Other buttons should not have active styling
+    const twoHrBtn = screen.getByTestId('time-filter-2hr')
+    expect(twoHrBtn).not.toHaveClass('bg-white')
+  })
+
+  it('test_FR03_time_filter: selecting "Next 2 hours" calls fetchEvents with time_filter=2hr', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const twoHrBtn = screen.getByTestId('time-filter-2hr')
+    fireEvent.click(twoHrBtn)
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ time_filter: '2hr' })
+    })
+  })
+
+  it('test_FR03_time_filter: selecting "Today" calls fetchEvents with time_filter=today', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const todayBtn = screen.getByTestId('time-filter-today')
+    fireEvent.click(todayBtn)
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ time_filter: 'today' })
+    })
+  })
+
+  it('test_FR03_time_filter: selecting "This week" calls fetchEvents with time_filter=week', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const weekBtn = screen.getByTestId('time-filter-week')
+    fireEvent.click(weekBtn)
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ time_filter: 'week' })
+    })
+  })
+
+  it('test_FR03_time_filter: selecting "All" clears time filter', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    // Select a filter first
+    fireEvent.click(screen.getByTestId('time-filter-2hr'))
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Then clear it
+    fireEvent.click(screen.getByTestId('time-filter-all'))
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledTimes(3)
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined)
+    })
+  })
+
+  it('test_FR03_time_filter: time filter updates event list', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Annual Tech Hackathon')).toBeInTheDocument()
+      expect(screen.getByText('Industry Panel Night')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('time-filter-2hr'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Annual Tech Hackathon')).toBeInTheDocument()
+      expect(screen.queryByText('Industry Panel Night')).not.toBeInTheDocument()
+    })
+  })
+
+  it('test_FR03_time_filter: time filter combines with radius filter', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    // Set time filter
+    fireEvent.click(screen.getByTestId('time-filter-2hr'))
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Set radius filter
+    const radiusSelect = screen.getByTestId('radius-filter')
+    fireEvent.change(radiusSelect, { target: { value: '500' } })
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({
+        lat: 51.3758,
+        lng: -2.3599,
+        radius_m: 500,
+        time_filter: '2hr',
+      })
+    })
+  })
+
+  it('test_FR03_time_filter: active filter chip is visually highlighted', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
+
+    // Click "Today"
+    const todayBtn = screen.getByTestId('time-filter-today')
+    fireEvent.click(todayBtn)
+
+    await waitFor(() => {
+      expect(todayBtn).toHaveClass('bg-white')
+      expect(todayBtn).toHaveClass('shadow-sm')
+    })
+
+    // "All" should no longer be highlighted
+    const allBtn = screen.getByTestId('time-filter-all')
+    expect(allBtn).not.toHaveClass('bg-white')
+  })
+})
+
+// --- FR-02: Location/Radius Filter Tests ---
+
+describe('FR-02: Location/Radius Filter', () => {
+  it('test_FR02_location_filter: renders radius filter dropdown with options', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
+
+    const select = screen.getByTestId('radius-filter') as HTMLSelectElement
+    expect(select).toBeInTheDocument()
+    expect(select.value).toBe('') // Default: All distances
+
+    // Verify options exist
+    const options = select.querySelectorAll('option')
+    const optionValues = Array.from(options).map(o => o.value)
+    expect(optionValues).toContain('')      // All distances
+    expect(optionValues).toContain('100')   // 100m
+    expect(optionValues).toContain('500')   // 500m
+    expect(optionValues).toContain('1000')  // 1km
+  })
+
+  it('test_FR02_location_filter: selecting radius calls fetchEvents with params', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const select = screen.getByTestId('radius-filter')
+    fireEvent.change(select, { target: { value: '500' } })
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({
+        lat: 51.3758,
+        lng: -2.3599,
+        radius_m: 500,
+      })
+    })
+  })
+
+  it('test_FR02_location_filter: clearing filter calls fetchEvents without params', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    // First select a radius
+    const select = screen.getByTestId('radius-filter')
+    fireEvent.change(select, { target: { value: '500' } })
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Then clear the filter
+    fireEvent.change(select, { target: { value: '' } })
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledTimes(3)
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined)
+    })
+  })
+
+  it('test_FR02_location_filter: event count updates when filter changes', async () => {
+    // First call returns 2 events (no filter)
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    // Second call returns 1 event (filtered)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+
+    render(<DashboardPage />)
+
+    // Find the Active Events stat card by its label, then check the value within it
+    await waitFor(() => {
+      const activeEventsLabel = screen.getByText('Active Events')
+      const card = activeEventsLabel.closest('div.border') as HTMLElement
+      expect(within(card).getByText('2')).toBeInTheDocument()
+    })
+
+    const select = screen.getByTestId('radius-filter')
+    fireEvent.change(select, { target: { value: '500' } })
+
+    await waitFor(() => {
+      const activeEventsLabel = screen.getByText('Active Events')
+      const card = activeEventsLabel.closest('div.border') as HTMLElement
+      expect(within(card).getByText('1')).toBeInTheDocument()
+    })
+  })
+})
+
+// --- FR-07: Keyword Search Tests ---
+
+describe('FR-07: Keyword Search', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+  })
+
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  it('test_FR07_keyword_search: renders search input', async () => {
+    jest.useRealTimers()
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
+
+    const searchInput = screen.getByTestId('search-input')
+    expect(searchInput).toBeInTheDocument()
+    expect(searchInput).toHaveAttribute('placeholder', 'Search events...')
+  })
+
+  it('test_FR07_keyword_search: search filters results via API', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const searchInput = screen.getByTestId('search-input')
+    fireEvent.change(searchInput, { target: { value: 'hackathon' } })
+
+    // Advance past 300ms debounce
+    act(() => { jest.advanceTimersByTime(300) })
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ search: 'hackathon' })
+    })
+  })
+
+  it('test_FR07_keyword_search: shows "No events match your search" when empty results', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([])
+
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const searchInput = screen.getByTestId('search-input')
+    fireEvent.change(searchInput, { target: { value: 'nonexistent' } })
+
+    act(() => { jest.advanceTimersByTime(300) })
+
+    await waitFor(() => {
+      expect(screen.getByText('No events match your search')).toBeInTheDocument()
+    })
+  })
+
+  it('test_FR07_keyword_search: clearing search restores full event list', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const searchInput = screen.getByTestId('search-input')
+
+    // Type a search term
+    fireEvent.change(searchInput, { target: { value: 'hackathon' } })
+    act(() => { jest.advanceTimersByTime(300) })
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Click clear button
+    const clearBtn = screen.getByTestId('search-clear')
+    fireEvent.click(clearBtn)
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledTimes(3)
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined)
+    })
+  })
+
+  it('test_FR07_keyword_search: Enter key triggers search immediately', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const searchInput = screen.getByTestId('search-input')
+    fireEvent.change(searchInput, { target: { value: 'hackathon' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+
+    // Should trigger immediately without waiting for debounce
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ search: 'hackathon' })
+    })
+  })
+
+  it('test_FR07_keyword_search: search combines with other filters', async () => {
+    jest.useRealTimers()
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    // Set time filter
+    fireEvent.click(screen.getByTestId('time-filter-2hr'))
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Set radius filter
+    const radiusSelect = screen.getByTestId('radius-filter')
+    fireEvent.change(radiusSelect, { target: { value: '500' } })
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(3))
+
+    // Type search and press Enter
+    const searchInput = screen.getByTestId('search-input')
+    fireEvent.change(searchInput, { target: { value: 'coffee' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({
+        lat: 51.3758,
+        lng: -2.3599,
+        radius_m: 500,
+        time_filter: '2hr',
+        search: 'coffee',
+      })
     })
   })
 })
