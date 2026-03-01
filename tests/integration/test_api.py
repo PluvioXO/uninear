@@ -741,3 +741,115 @@ def test_NFR01_event_list_performance():
 
         assert response.status_code == 200
         assert elapsed < 2.0, f"GET /events took {elapsed:.3f}s, exceeds 2s NFR-01 limit"
+
+
+# --- FR-02: Location/Radius Filter Tests ---
+
+def test_FR02_location_filter_returns_nearby_events():
+    """GET /events?lat=...&lng=...&radius_m=... returns only events within radius."""
+    # Bath campus center: 51.3758, -2.3599
+    # Event A: ~100m away (very close)
+    # Event B: ~5000m away (far)
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Nearby Event", "description": "Close",
+         "location": "Student Union", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+        {"id": 2, "title": "Far Event", "description": "Far away",
+         "location": "Remote Building", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.4200, "longitude": -2.3000},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"lat": 51.3758, "lng": -2.3599, "radius_m": 500})
+        assert response.status_code == 200
+        body = response.json()
+        # Only the nearby event should be returned (within 500m)
+        assert len(body) == 1
+        assert body[0]["title"] == "Nearby Event"
+
+
+def test_FR02_location_filter_without_radius_returns_all():
+    """GET /events without radius params returns all events (no filter)."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Event A", "description": "Test",
+         "location": "Hall A", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+        {"id": 2, "title": "Event B", "description": "Test",
+         "location": "Hall B", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.4200, "longitude": -2.3000},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events")
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 2
+
+
+def test_FR02_location_filter_excludes_events_without_coordinates():
+    """Events without lat/lng are excluded when radius filter is active."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Has Coords", "description": "Test",
+         "location": "Hall", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+        {"id": 2, "title": "No Coords", "description": "Test",
+         "location": "Unknown", "start_time": "2026-04-02T10:00:00+00:00",
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"lat": 51.3758, "lng": -2.3599, "radius_m": 500})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "Has Coords"
+
+
+def test_FR02_location_filter_invalid_lat_returns_422():
+    """Invalid latitude (>90) returns 422 validation error."""
+    response = client.get("/events", params={"lat": 999, "lng": -2.3599, "radius_m": 500})
+    assert response.status_code == 422
+
+
+def test_FR02_location_filter_negative_radius_returns_422():
+    """Negative radius returns 422 validation error."""
+    response = client.get("/events", params={"lat": 51.3758, "lng": -2.3599, "radius_m": -1})
+    assert response.status_code == 422
+
+
+def test_FR02_location_filter_partial_params_ignored():
+    """If only lat is provided (no lng/radius_m), filter is not applied — all events returned."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Event A", "description": "Test",
+         "location": "Hall A", "start_time": "2026-04-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"lat": 51.3758})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1  # All events returned (no filtering)

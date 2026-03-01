@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import MagneticButton from '@/components/MagneticButton';
@@ -50,27 +50,35 @@ function toEvent(e: EventResponse): Event {
   };
 }
 
+// Bath campus center as default location
+const CAMPUS_LAT = 51.3758;
+const CAMPUS_LNG = -2.3599;
+
 export default function DashboardPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [radiusFilter, setRadiusFilter] = useState<number | null>(null);
 
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async (radius?: number | null) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchEvents();
+      const params = radius != null
+        ? { lat: CAMPUS_LAT, lng: CAMPUS_LNG, radius_m: radius }
+        : undefined;
+      const data = await fetchEvents(params);
       setEvents(data.map(toEvent));
     } catch {
       setError('Unable to load events. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { loadEvents(); }, []);
+  useEffect(() => { loadEvents(radiusFilter); }, [radiusFilter, loadEvents]);
 
   // Derived state for statistics
   const totalMembers = 1248; // Static for now
@@ -230,6 +238,22 @@ export default function DashboardPage() {
                 <span className="w-2 h-2 bg-orange-600 rounded-full"></span>
                 Upcoming Events
               </h2>
+              <div className="flex items-center gap-3">
+                <select
+                  data-testid="radius-filter"
+                  aria-label="Filter events by distance"
+                  value={radiusFilter ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRadiusFilter(val === '' ? null : Number(val));
+                  }}
+                  className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:border-orange-500"
+                >
+                  <option value="">All distances</option>
+                  <option value="100">Within 100m</option>
+                  <option value="500">Within 500m</option>
+                  <option value="1000">Within 1km</option>
+                </select>
               <div className="flex bg-gray-100 rounded-xl p-1" data-testid="view-toggle">
                 <button
                   onClick={() => setViewMode('list')}
@@ -250,6 +274,7 @@ export default function DashboardPage() {
                   Map
                 </button>
               </div>
+              </div>
             </div>
             
             {loading ? (
@@ -266,7 +291,7 @@ export default function DashboardPage() {
               <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
                 <p className="text-red-600 mb-4">{error}</p>
                 <button
-                  onClick={loadEvents}
+                  onClick={() => loadEvents(radiusFilter)}
                   className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-500 transition-colors"
                 >
                   Retry

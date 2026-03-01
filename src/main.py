@@ -1,9 +1,10 @@
 import logging
+import math
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional, cast
 
 from fastapi import FastAPI, HTTPException, Response, Query, Depends, Request
 from fastapi.responses import JSONResponse
-from typing import Any, Dict, cast
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import the database connection
@@ -43,6 +44,17 @@ def verify_token(request: Request, db: Database = Depends(_get_db)) -> Dict[str,
         if "expired" in error_msg:
             raise HTTPException(status_code=401, detail="Token expired")
         raise HTTPException(status_code=401, detail="Invalid token")
+
+def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return the great-circle distance in metres between two points."""
+    R = 6_371_000  # Earth radius in metres
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
 
 class UniNearBackend:
     def __init__(self):
@@ -89,7 +101,12 @@ class UniNearBackend:
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
 
-    def get_events(self) -> list[dict]:
+    def get_events(
+        self,
+        lat: Optional[float] = Query(None, ge=-90, le=90),
+        lng: Optional[float] = Query(None, ge=-180, le=180),
+        radius_m: Optional[float] = Query(None, gt=0),
+    ) -> list[dict]:
         try:
             now = datetime.now(timezone.utc).isoformat()
             response = (
@@ -101,7 +118,18 @@ class UniNearBackend:
                 .order("start_time")
                 .execute()
             )
-            return cast(list[Dict[str, Any]], response.data or [])
+            events = cast(list[Dict[str, Any]], response.data or [])
+
+            # Apply radius filter when all three params are provided
+            if lat is not None and lng is not None and radius_m is not None:
+                events = [
+                    e for e in events
+                    if e.get("latitude") is not None
+                    and e.get("longitude") is not None
+                    and _haversine_distance(lat, lng, e["latitude"], e["longitude"]) <= radius_m
+                ]
+
+            return events
         except Exception as e:
             logging.error(f"Database error fetching events: {e}")
             raise HTTPException(status_code=503, detail="Unable to load events")

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import DashboardPage from '../../app/dashboard/page'
 
 // Mock the components used in DashboardPage
@@ -219,6 +219,85 @@ describe('NFR-14: Event API Integration', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Recovered Event')).toBeInTheDocument()
+    })
+  })
+})
+
+// --- FR-02: Location/Radius Filter Tests ---
+
+describe('FR-02: Location/Radius Filter', () => {
+  it('test_FR02_location_filter: renders radius filter dropdown with options', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
+
+    const select = screen.getByTestId('radius-filter') as HTMLSelectElement
+    expect(select).toBeInTheDocument()
+    expect(select.value).toBe('') // Default: All distances
+
+    // Verify options exist
+    const options = select.querySelectorAll('option')
+    const optionValues = Array.from(options).map(o => o.value)
+    expect(optionValues).toContain('')      // All distances
+    expect(optionValues).toContain('100')   // 100m
+    expect(optionValues).toContain('500')   // 500m
+    expect(optionValues).toContain('1000')  // 1km
+  })
+
+  it('test_FR02_location_filter: selecting radius calls fetchEvents with params', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const select = screen.getByTestId('radius-filter')
+    fireEvent.change(select, { target: { value: '500' } })
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({
+        lat: 51.3758,
+        lng: -2.3599,
+        radius_m: 500,
+      })
+    })
+  })
+
+  it('test_FR02_location_filter: clearing filter calls fetchEvents without params', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    // First select a radius
+    const select = screen.getByTestId('radius-filter')
+    fireEvent.change(select, { target: { value: '500' } })
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Then clear the filter
+    fireEvent.change(select, { target: { value: '' } })
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledTimes(3)
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined)
+    })
+  })
+
+  it('test_FR02_location_filter: event count updates when filter changes', async () => {
+    // First call returns 2 events (no filter)
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    // Second call returns 1 event (filtered)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+
+    render(<DashboardPage />)
+
+    // Find the Active Events stat card by its label, then check the value within it
+    await waitFor(() => {
+      const activeEventsLabel = screen.getByText('Active Events')
+      const card = activeEventsLabel.closest('div.border') as HTMLElement
+      expect(within(card).getByText('2')).toBeInTheDocument()
+    })
+
+    const select = screen.getByTestId('radius-filter')
+    fireEvent.change(select, { target: { value: '500' } })
+
+    await waitFor(() => {
+      const activeEventsLabel = screen.getByText('Active Events')
+      const card = activeEventsLabel.closest('div.border') as HTMLElement
+      expect(within(card).getByText('1')).toBeInTheDocument()
     })
   })
 })
