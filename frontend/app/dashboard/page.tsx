@@ -61,15 +61,22 @@ export default function DashboardPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [radiusFilter, setRadiusFilter] = useState<number | null>(null);
+  const [timeFilter, setTimeFilter] = useState<string | null>(null);
 
-  const loadEvents = useCallback(async (radius?: number | null) => {
+  const loadEvents = useCallback(async (radius?: number | null, time?: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const params = radius != null
-        ? { lat: CAMPUS_LAT, lng: CAMPUS_LNG, radius_m: radius }
-        : undefined;
-      const data = await fetchEvents(params);
+      const params: { lat?: number; lng?: number; radius_m?: number; time_filter?: string } = {};
+      if (radius != null) {
+        params.lat = CAMPUS_LAT;
+        params.lng = CAMPUS_LNG;
+        params.radius_m = radius;
+      }
+      if (time) {
+        params.time_filter = time;
+      }
+      const data = await fetchEvents(Object.keys(params).length > 0 ? params : undefined);
       setEvents(data.map(toEvent));
     } catch {
       setError('Unable to load events. Please try again.');
@@ -78,7 +85,7 @@ export default function DashboardPage() {
     }
   }, []);
 
-  useEffect(() => { loadEvents(radiusFilter); }, [radiusFilter, loadEvents]);
+  useEffect(() => { loadEvents(radiusFilter, timeFilter); }, [radiusFilter, timeFilter, loadEvents]);
 
   // Derived state for statistics
   const totalMembers = 1248; // Static for now
@@ -238,7 +245,28 @@ export default function DashboardPage() {
                 <span className="w-2 h-2 bg-orange-600 rounded-full"></span>
                 Upcoming Events
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex bg-gray-100 rounded-xl p-1" role="group" aria-label="Filter events by time" data-testid="time-filter">
+                  {([
+                    { label: 'All', value: '' },
+                    { label: 'Next 2 hours', value: '2hr' },
+                    { label: 'Today', value: 'today' },
+                    { label: 'This week', value: 'week' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setTimeFilter(opt.value || null)}
+                      data-testid={`time-filter-${opt.value || 'all'}`}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                        (timeFilter ?? '') === opt.value
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
                 <select
                   data-testid="radius-filter"
                   aria-label="Filter events by distance"
@@ -291,7 +319,7 @@ export default function DashboardPage() {
               <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
                 <p className="text-red-600 mb-4">{error}</p>
                 <button
-                  onClick={() => loadEvents(radiusFilter)}
+                  onClick={() => loadEvents(radiusFilter, timeFilter)}
                   className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-500 transition-colors"
                 >
                   Retry

@@ -35,15 +35,21 @@ export async function fetchEvents(params?: {
   lat?: number;
   lng?: number;
   radius_m?: number;
+  time_filter?: '2hr' | 'today' | 'week';
 }): Promise<EventResponse[]> {
   let url = `${API_BASE_URL}/events`;
+  const qs = new URLSearchParams();
   if (params?.lat != null && params?.lng != null && params?.radius_m != null) {
-    const qs = new URLSearchParams({
-      lat: String(params.lat),
-      lng: String(params.lng),
-      radius_m: String(params.radius_m),
-    });
-    url += `?${qs.toString()}`;
+    qs.set('lat', String(params.lat));
+    qs.set('lng', String(params.lng));
+    qs.set('radius_m', String(params.radius_m));
+  }
+  if (params?.time_filter) {
+    qs.set('time_filter', params.time_filter);
+  }
+  const qsStr = qs.toString();
+  if (qsStr) {
+    url += `?${qsStr}`;
   }
   const res = await fetch(url);
   if (!res.ok) {

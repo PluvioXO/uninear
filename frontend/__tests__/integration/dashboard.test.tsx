@@ -223,6 +223,137 @@ describe('NFR-14: Event API Integration', () => {
   })
 })
 
+// --- FR-03: Time Filter Tests ---
+
+describe('FR-03: Time Filter', () => {
+  it('test_FR03_time_filter: renders time filter chips with default "All" selected', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
+
+    const timeFilter = screen.getByTestId('time-filter')
+    expect(timeFilter).toBeInTheDocument()
+
+    // "All" button should have active styling (bg-white)
+    const allBtn = screen.getByTestId('time-filter-all')
+    expect(allBtn).toHaveClass('bg-white')
+
+    // Other buttons should not have active styling
+    const twoHrBtn = screen.getByTestId('time-filter-2hr')
+    expect(twoHrBtn).not.toHaveClass('bg-white')
+  })
+
+  it('test_FR03_time_filter: selecting "Next 2 hours" calls fetchEvents with time_filter=2hr', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const twoHrBtn = screen.getByTestId('time-filter-2hr')
+    fireEvent.click(twoHrBtn)
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ time_filter: '2hr' })
+    })
+  })
+
+  it('test_FR03_time_filter: selecting "Today" calls fetchEvents with time_filter=today', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const todayBtn = screen.getByTestId('time-filter-today')
+    fireEvent.click(todayBtn)
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ time_filter: 'today' })
+    })
+  })
+
+  it('test_FR03_time_filter: selecting "This week" calls fetchEvents with time_filter=week', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    const weekBtn = screen.getByTestId('time-filter-week')
+    fireEvent.click(weekBtn)
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ time_filter: 'week' })
+    })
+  })
+
+  it('test_FR03_time_filter: selecting "All" clears time filter', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    // Select a filter first
+    fireEvent.click(screen.getByTestId('time-filter-2hr'))
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Then clear it
+    fireEvent.click(screen.getByTestId('time-filter-all'))
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledTimes(3)
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined)
+    })
+  })
+
+  it('test_FR03_time_filter: time filter updates event list', async () => {
+    mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
+    mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Annual Tech Hackathon')).toBeInTheDocument()
+      expect(screen.getByText('Industry Panel Night')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('time-filter-2hr'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Annual Tech Hackathon')).toBeInTheDocument()
+      expect(screen.queryByText('Industry Panel Night')).not.toBeInTheDocument()
+    })
+  })
+
+  it('test_FR03_time_filter: time filter combines with radius filter', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    // Set time filter
+    fireEvent.click(screen.getByTestId('time-filter-2hr'))
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(2))
+
+    // Set radius filter
+    const radiusSelect = screen.getByTestId('radius-filter')
+    fireEvent.change(radiusSelect, { target: { value: '500' } })
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({
+        lat: 51.3758,
+        lng: -2.3599,
+        radius_m: 500,
+        time_filter: '2hr',
+      })
+    })
+  })
+
+  it('test_FR03_time_filter: active filter chip is visually highlighted', async () => {
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
+
+    // Click "Today"
+    const todayBtn = screen.getByTestId('time-filter-today')
+    fireEvent.click(todayBtn)
+
+    await waitFor(() => {
+      expect(todayBtn).toHaveClass('bg-white')
+      expect(todayBtn).toHaveClass('shadow-sm')
+    })
+
+    // "All" should no longer be highlighted
+    const allBtn = screen.getByTestId('time-filter-all')
+    expect(allBtn).not.toHaveClass('bg-white')
+  })
+})
+
 // --- FR-02: Location/Radius Filter Tests ---
 
 describe('FR-02: Location/Radius Filter', () => {

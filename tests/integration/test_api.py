@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
@@ -832,6 +833,174 @@ def test_FR02_location_filter_invalid_lat_returns_422():
 def test_FR02_location_filter_negative_radius_returns_422():
     """Negative radius returns 422 validation error."""
     response = client.get("/events", params={"lat": 51.3758, "lng": -2.3599, "radius_m": -1})
+    assert response.status_code == 422
+
+
+# --- FR-03: Time Filter Tests ---
+
+def test_FR03_time_filter_2hr():
+    """GET /events?time_filter=2hr returns only events starting within the next 2 hours."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    soon = (now + timedelta(hours=1)).isoformat()       # within 2hr
+    later = (now + timedelta(hours=5)).isoformat()       # outside 2hr
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Soon Event", "description": "Test",
+         "location": "Hall A", "start_time": soon,
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Later Event", "description": "Test",
+         "location": "Hall B", "start_time": later,
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"time_filter": "2hr"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "Soon Event"
+
+
+def test_FR03_time_filter_today():
+    """GET /events?time_filter=today returns only events happening today."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    # Event starting in 1 hour (today)
+    today_event_time = (now + timedelta(hours=1)).isoformat()
+    # Event starting in 3 days (not today)
+    future_event_time = (now + timedelta(days=3)).isoformat()
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Today Event", "description": "Test",
+         "location": "Hall A", "start_time": today_event_time,
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Future Event", "description": "Test",
+         "location": "Hall B", "start_time": future_event_time,
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"time_filter": "today"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "Today Event"
+
+
+def test_FR03_time_filter_week():
+    """GET /events?time_filter=week returns events within the next 7 days."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    this_week = (now + timedelta(days=3)).isoformat()
+    next_month = (now + timedelta(days=30)).isoformat()
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "This Week Event", "description": "Test",
+         "location": "Hall A", "start_time": this_week,
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Next Month Event", "description": "Test",
+         "location": "Hall B", "start_time": next_month,
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={"time_filter": "week"})
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["title"] == "This Week Event"
+
+
+def test_FR03_time_filter_no_filter_returns_all():
+    """GET /events without time_filter returns all future events."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Event A", "description": "Test",
+         "location": "Hall A", "start_time": (now + timedelta(hours=1)).isoformat(),
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+        {"id": 2, "title": "Event B", "description": "Test",
+         "location": "Hall B", "start_time": (now + timedelta(days=30)).isoformat(),
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events")
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 2
+
+
+def test_FR03_time_filter_combined_with_radius():
+    """GET /events?time_filter=2hr&lat=...&lng=...&radius_m=... applies BOTH filters."""
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    soon = (now + timedelta(hours=1)).isoformat()
+
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Nearby Soon", "description": "Test",
+         "location": "Hall A", "start_time": soon,
+         "capacity": 100, "attendee_count": 10, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+        {"id": 2, "title": "Far Soon", "description": "Test",
+         "location": "Hall B", "start_time": soon,
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.4200, "longitude": -2.3000},
+        {"id": 3, "title": "Nearby Later", "description": "Test",
+         "location": "Hall C", "start_time": (now + timedelta(hours=5)).isoformat(),
+         "capacity": 50, "attendee_count": 5, "status": "Published",
+         "organizer": "Org", "latitude": 51.3760, "longitude": -2.3601},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_response
+
+        response = client.get("/events", params={
+            "time_filter": "2hr",
+            "lat": 51.3758, "lng": -2.3599, "radius_m": 500
+        })
+        assert response.status_code == 200
+        body = response.json()
+        # Only "Nearby Soon" should pass both filters
+        assert len(body) == 1
+        assert body[0]["title"] == "Nearby Soon"
+
+
+def test_FR03_time_filter_invalid_value_returns_422():
+    """GET /events?time_filter=invalid returns 422 validation error."""
+    response = client.get("/events", params={"time_filter": "invalid"})
     assert response.status_code == 422
 
 

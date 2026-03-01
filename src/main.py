@@ -1,6 +1,7 @@
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from enum import Enum
 from typing import Any, Dict, Optional, cast
 
 from fastapi import FastAPI, HTTPException, Response, Query, Depends, Request
@@ -56,6 +57,12 @@ def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> f
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+class TimeFilter(str, Enum):
+    TWO_HOURS = "2hr"
+    TODAY = "today"
+    WEEK = "week"
+
+
 class UniNearBackend:
     def __init__(self):
         self.app = FastAPI()
@@ -106,19 +113,35 @@ class UniNearBackend:
         lat: Optional[float] = Query(None, ge=-90, le=90),
         lng: Optional[float] = Query(None, ge=-180, le=180),
         radius_m: Optional[float] = Query(None, gt=0),
+        time_filter: Optional[TimeFilter] = Query(None),
     ) -> list[dict]:
         try:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(timezone.utc)
             response = (
                 self.db.client
                 .table("events")
                 .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, latitude, longitude")
                 .eq("status", "Published")
-                .gte("start_time", now)
+                .gte("start_time", now.isoformat())
                 .order("start_time")
                 .execute()
             )
             events = cast(list[Dict[str, Any]], response.data or [])
+
+            # Apply time filter when provided
+            if time_filter is not None:
+                if time_filter == TimeFilter.TWO_HOURS:
+                    cutoff = now + timedelta(hours=2)
+                elif time_filter == TimeFilter.TODAY:
+                    cutoff = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+                else:  # TimeFilter.WEEK
+                    cutoff = now + timedelta(days=7)
+
+                events = [
+                    e for e in events
+                    if e.get("start_time") is not None
+                    and datetime.fromisoformat(e["start_time"].replace("Z", "+00:00")) <= cutoff
+                ]
 
             # Apply radius filter when all three params are provided
             if lat is not None and lng is not None and radius_m is not None:
