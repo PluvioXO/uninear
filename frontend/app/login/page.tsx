@@ -24,11 +24,37 @@ export default function LoginPage() {
 
     setError('');
     setLoading(true);
+    const hasSupabaseConfig = Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    );
+    const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? (() => {
+        try {
+          return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname;
+        } catch {
+          return 'invalid-url';
+        }
+      })()
+      : 'unset';
+
+    if (process.env.NODE_ENV === 'production' && !hasSupabaseConfig) {
+      console.error('[auth] Missing Supabase env vars in production', { supabaseHost });
+      setError('App configuration error: missing Supabase environment variables.');
+      setLoading(false);
+      return;
+    }
 
     try {
       const { error: authError } = await login(email, password);
 
       if (authError) {
+        console.error('[auth] Login failed', {
+          supabaseHost,
+          message: authError.message,
+          code: authError.code,
+          status: authError.status,
+          name: authError.name,
+        });
         if (authError.message?.toLowerCase().includes('email not confirmed')) {
           setError('Please confirm your email before logging in. Check your inbox for a confirmation link.');
         } else {
@@ -39,8 +65,13 @@ export default function LoginPage() {
       }
 
       router.push('/dashboard');
-    } catch {
-      setError('Invalid email or password');
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('Missing NEXT_PUBLIC_SUPABASE_')) {
+        setError('App configuration error: missing Supabase environment variables.');
+      } else {
+        setError('Invalid email or password');
+      }
+      console.error('[auth] Login threw exception', { supabaseHost, error: err });
       setLoading(false);
     }
   };
