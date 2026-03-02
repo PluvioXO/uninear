@@ -1,5 +1,6 @@
 import logging
 import math
+import os
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, Optional, cast
@@ -73,6 +74,30 @@ class UniNearBackend:
         self.setup_routes()
 
     def setup_middleware(self):
+        origins = self._get_allowed_origins()
+        origin_regex = os.getenv("CORS_ALLOW_ORIGIN_REGEX")
+
+        # Allows Vercel preview deployments by default while still keeping
+        # explicit allow_origins for known production/local origins.
+        if not origin_regex and os.getenv("ENABLE_VERCEL_PREVIEW_CORS", "true").lower() in {"1", "true", "yes"}:
+            origin_regex = r"^https:\/\/.*\.vercel\.app$"
+
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_origin_regex=origin_regex,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
+    def _get_allowed_origins(self) -> list[str]:
+        env_origins = os.getenv("CORS_ALLOW_ORIGINS")
+        if env_origins:
+            origins = [o.strip().rstrip("/") for o in env_origins.split(",") if o.strip()]
+            if origins:
+                return list(dict.fromkeys(origins))
+
         origins = [
             "https://uninear-gvjz.vercel.app",
             "http://localhost:3000",
@@ -80,13 +105,11 @@ class UniNearBackend:
             "http://localhost:8081",
             "http://127.0.0.1:8081",
         ]
-        self.app.add_middleware(
-            CORSMiddleware,
-            allow_origins=origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        frontend_url = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
+        if frontend_url:
+            origins.append(frontend_url)
+
+        return list(dict.fromkeys(origins))
 
     def setup_routes(self):
         # Public endpoints (no auth required)
@@ -397,4 +420,3 @@ class UniNearBackend:
 # Create the app instance for uvicorn to pick up
 backend = UniNearBackend()
 app = backend.app
-
