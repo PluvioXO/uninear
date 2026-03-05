@@ -307,11 +307,15 @@ def test_FR10_publish_event():
     # Part 2: GET /events returns the published event (RLS filters at DB level)
     mock_get_response = MagicMock()
     mock_get_response.data = [
-        {"id": 1, "title": "My Event", "status": "Published"},
+        {"id": 1, "title": "My Event", "status": "Published",
+         "description": None, "location": "Test Hall", "start_time": "2099-01-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 5, "organizer": None,
+         "latitude": None, "longitude": None},
     ]
 
     with patch.object(backend.db.client, 'table') as mock_table:
-        mock_table.return_value.select.return_value.execute.return_value = mock_get_response
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_get_response
 
         response = client.get("/events")
 
