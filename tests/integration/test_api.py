@@ -262,6 +262,65 @@ def test_update_event():
             assert response.status_code == 200
             assert response.json()[0]["title"] == "Updated Title"
 
+# 5b. test_FR10_get_organizer_events — organiser sees own Draft + Published events
+def test_FR10_get_organizer_events():
+    """FR-10: GET /api/organizer/events returns all events for the authenticated organiser."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Draft Event", "status": "Draft", "organiser_id": MOCK_USER_ID},
+        {"id": 2, "title": "Published Event", "status": "Published", "organiser_id": MOCK_USER_ID},
+    ]
+
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_response
+
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
+            response = client.get("/api/organizer/events", headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+            events = response.json()
+            assert len(events) == 2
+            statuses = [e["status"] for e in events]
+            assert "Draft" in statuses
+            assert "Published" in statuses
+            mock_admin.table.return_value.select.return_value.eq.assert_called_once_with("organiser_id", MOCK_USER_ID)
+
+
+# 5c. test_FR10_publish_event — status update to Published, visible in GET /events
+def test_FR10_publish_event():
+    """FR-10: Organiser publishes draft event, status changes to Published."""
+    # Part 1: PATCH /events/{id} updates status to "Published"
+    mock_update_response = MagicMock()
+    mock_update_response.data = [{"id": 1, "title": "My Event", "status": "Published"}]
+
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table') as mock_table:
+            mock_table.return_value.update.return_value.eq.return_value.execute.return_value = mock_update_response
+
+            response = client.patch("/events/1", json={"status": "Published"}, headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+            assert response.json()[0]["status"] == "Published"
+            mock_table.return_value.update.assert_called_once_with({"status": "Published"})
+
+    # Part 2: GET /events returns the published event (RLS filters at DB level)
+    mock_get_response = MagicMock()
+    mock_get_response.data = [
+        {"id": 1, "title": "My Event", "status": "Published"},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        mock_table.return_value.select.return_value.execute.return_value = mock_get_response
+
+        response = client.get("/events")
+
+        assert response.status_code == 200
+        events = response.json()
+        assert len(events) == 1
+        assert events[0]["status"] == "Published"
+
+
 # 6. test_FR16_create_rsvp — RSVP creates record and returns 201
 def test_FR16_create_rsvp():
     existing_response = MagicMock()
@@ -722,6 +781,7 @@ def test_NFR10_no_token_returns_401():
         ("DELETE", "/events/1/rsvp", rsvp_payload),
         ("GET", "/api/rsvp?user_id=u1", None),
         ("GET", "/api/events/1/rsvps", None),
+        ("GET", "/api/organizer/events", None),
     ]
 
     for method, path, body in protected_requests:

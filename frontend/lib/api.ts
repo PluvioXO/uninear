@@ -90,3 +90,31 @@ export interface EventResponse {
   latitude?: number;
   longitude?: number;
 }
+
+export async function fetchOrganizerEvents(): Promise<Response> {
+  return apiFetch('/api/organizer/events');
+}
+
+export async function updateEvent(eventId: number, data: Record<string, unknown>): Promise<Response> {
+  return apiFetch(`/events/${eventId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function createEvent(data: {
+  title: string;
+  date: string;
+  location: string;
+  capacity: number;
+  organizer?: string;
+  status?: string;
+  mood_tags?: string[];
+  energy_level?: string;
+  description?: string;
+}): Promise<Response> {
+  return apiFetch('/events', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
