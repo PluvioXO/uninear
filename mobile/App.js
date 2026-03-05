@@ -106,6 +106,8 @@ export default function App() {
   const [authPasswordVisible, setAuthPasswordVisible] = useState(false);
   const [authFullName, setAuthFullName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [eventScope, setEventScope] = useState('all'); // 'all' | 'rsvped' | 'attended'
+  const [dateSortOrder, setDateSortOrder] = useState('asc'); // 'asc' | 'desc'
   const [viewMode, setViewMode] = useState('list'); // 'list', 'map', 'filter'
   const [currentTab, setCurrentTab] = useState('events'); // 'events', 'friends', 'profile'
   const [selectedEvent, setSelectedEvent] = useState(null); // event detail modal
@@ -128,6 +130,7 @@ export default function App() {
   const [minRating, setMinRating] = useState(null);
   const [friends] = useState([]);
   const [rsvpEventIds, setRsvpEventIds] = useState(new Set());
+  const [rsvpRecords, setRsvpRecords] = useState([]);
   const [rsvpLoadingIds, setRsvpLoadingIds] = useState(new Set());
   const [attendeesModalEvent, setAttendeesModalEvent] = useState(null);
   const [attendees, setAttendees] = useState([]);
@@ -139,6 +142,7 @@ export default function App() {
     if (!authToken) {
       setEvents([]);
       setRsvpEventIds(new Set());
+      setRsvpRecords([]);
       setLoading(false);
       return;
     }
@@ -363,8 +367,11 @@ export default function App() {
     setAuthToken(null);
     setAuthUserId(null);
     setEvents([]);
+    setRsvpEventIds(new Set());
+    setRsvpRecords([]);
     setAuthPassword('');
     setAuthMode('login');
+    setEventScope('all');
     setCurrentTab('events');
     setViewMode('list');
   };
@@ -442,6 +449,7 @@ export default function App() {
         return;
       }
       const data = await response.json();
+      setRsvpRecords(Array.isArray(data) ? data : []);
       const ids = new Set(
         (Array.isArray(data) ? data : [])
           .map((row) => row?.event_id)
@@ -450,6 +458,7 @@ export default function App() {
       setRsvpEventIds(ids);
     } catch (err) {
       setRsvpEventIds(new Set());
+      setRsvpRecords([]);
     }
   };
 
@@ -583,17 +592,19 @@ export default function App() {
     }
   };
 
+  const matchesSearchQuery = (event) => {
+    if (searchQuery.trim().length === 0) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (event.title || '').toLowerCase().includes(q) ||
+      (event.location || '').toLowerCase().includes(q) ||
+      (event.organizer || '').toLowerCase().includes(q) ||
+      (event.description || '').toLowerCase().includes(q)
+    );
+  };
+
   const filteredEvents = events.filter(event => {
-    // Search Filter — title, location, organizer, description
-    if (searchQuery.trim().length > 0) {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch =
-        (event.title       || '').toLowerCase().includes(q) ||
-        (event.location    || '').toLowerCase().includes(q) ||
-        (event.organizer   || '').toLowerCase().includes(q) ||
-        (event.description || '').toLowerCase().includes(q);
-      if (!matchesSearch) return false;
-    }
+    if (!matchesSearchQuery(event)) return false;
 
     // Radius Filter
     if (radius && event.latitude && event.longitude) {
@@ -627,6 +638,35 @@ export default function App() {
     if (minRating && (event.rating || 0) < minRating) return false;
 
     return true;
+  });
+
+  const pastAttendedEvents = (() => {
+    const byId = new Map();
+    const nowTs = Date.now();
+    (Array.isArray(rsvpRecords) ? rsvpRecords : []).forEach((row) => {
+      const event = row?.event ? { ...row.event, id: row.event.id ?? row.event_id } : null;
+      if (!event || typeof event.id !== 'number') return;
+      const eventTs = new Date(event.start_time || event.date).getTime();
+      if (!Number.isFinite(eventTs) || eventTs >= nowTs) return;
+      if (!matchesSearchQuery(event)) return;
+      byId.set(event.id, event);
+    });
+    return Array.from(byId.values()).sort(
+      (a, b) => new Date(b.start_time || b.date).getTime() - new Date(a.start_time || a.date).getTime()
+    );
+  })();
+
+  const scopedEvents =
+    eventScope === 'rsvped'
+      ? filteredEvents.filter((event) => rsvpEventIds.has(event.id))
+      : eventScope === 'attended'
+        ? pastAttendedEvents
+        : filteredEvents;
+
+  const sortedScopedEvents = [...scopedEvents].sort((a, b) => {
+    const aTs = new Date(a.start_time || a.date).getTime();
+    const bTs = new Date(b.start_time || b.date).getTime();
+    return dateSortOrder === 'asc' ? aTs - bTs : bTs - aTs;
   });
 
   const activeFilterCount = [
@@ -938,6 +978,7 @@ export default function App() {
     const isFollowing = societyId ? followedIds.has(societyId) : false;
     const isRsvped = rsvpEventIds.has(item.id);
     const isRsvpLoading = rsvpLoadingIds.has(item.id);
+    const isPastEvent = new Date(item.start_time || item.date).getTime() < Date.now();
 
     return (
     <View style={styles.card}>
@@ -1008,12 +1049,15 @@ export default function App() {
           <Text style={styles.calendarButtonText}>Add to Calendar</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.rsvpButton, isRsvped && styles.rsvpButtonSecondary]}
+          style={[
+            styles.rsvpButton,
+            (isRsvped || isPastEvent) && styles.rsvpButtonSecondary,
+          ]}
           onPress={() => handleRSVP(item)}
-          disabled={isRsvpLoading}
+          disabled={isRsvpLoading || isPastEvent}
         >
-          <Text style={[styles.rsvpButtonText, isRsvped && styles.rsvpButtonSecondaryText]}>
-            {isRsvpLoading ? 'Please wait...' : isRsvped ? 'Cancel RSVP' : 'RSVP'}
+          <Text style={[styles.rsvpButtonText, (isRsvped || isPastEvent) && styles.rsvpButtonSecondaryText]}>
+            {isPastEvent ? 'Attended' : isRsvpLoading ? 'Please wait...' : isRsvped ? 'Cancel RSVP' : 'RSVP'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1163,7 +1207,7 @@ export default function App() {
           </View>
           {searchQuery.trim().length > 0 && (
             <Text style={styles.searchResultCount}>
-              {filteredEvents.length} result{filteredEvents.length !== 1 ? 's' : ''} for &quot;{searchQuery}&quot;
+              {sortedScopedEvents.length} result{sortedScopedEvents.length !== 1 ? 's' : ''} for &quot;{searchQuery}&quot;
             </Text>
           )}
         </View>
@@ -1186,6 +1230,46 @@ export default function App() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {currentTab === 'events' && (
+          <>
+            <View style={styles.scopeControl}>
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'rsvped', label: 'My RSVPs' },
+                { key: 'attended', label: 'Past attended' },
+              ].map(({ key, label }) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.scopeChip, eventScope === key && styles.scopeChipActive]}
+                  onPress={() => {
+                    setEventScope(key);
+                    if (key === 'attended' && viewMode === 'map') setViewMode('list');
+                  }}
+                >
+                  <Text style={[styles.scopeChipText, eventScope === key && styles.scopeChipTextActive]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.sortControl}>
+              <Text style={styles.sortLabel}>Sort by date:</Text>
+              <TouchableOpacity
+                style={[styles.scopeChip, dateSortOrder === 'asc' && styles.scopeChipActive]}
+                onPress={() => setDateSortOrder('asc')}
+              >
+                <Text style={[styles.scopeChipText, dateSortOrder === 'asc' && styles.scopeChipTextActive]}>Oldest → Newest</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.scopeChip, dateSortOrder === 'desc' && styles.scopeChipActive]}
+                onPress={() => setDateSortOrder('desc')}
+              >
+                <Text style={[styles.scopeChipText, dateSortOrder === 'desc' && styles.scopeChipTextActive]}>Newest → Oldest</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
 
       {/* Event detail modal — opened from map callout */}
@@ -1389,10 +1473,16 @@ export default function App() {
 
       {currentTab === 'events' ? (
         viewMode === 'list' ? (
-          filteredEvents.length === 0 ? (
+          sortedScopedEvents.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateIcon}>🔍</Text>
-              <Text style={styles.emptyStateText}>No events match your search{activeFilterCount > 0 ? ' or filters' : ''}.</Text>
+              <Text style={styles.emptyStateText}>
+                {eventScope === 'attended'
+                  ? 'No past attended events found.'
+                  : eventScope === 'rsvped'
+                    ? 'No RSVP events found.'
+                    : `No events match your search${activeFilterCount > 0 ? ' or filters' : ''}.`}
+              </Text>
               {activeFilterCount > 0 && (
                 <TouchableOpacity onPress={resetFilters}>
                   <Text style={styles.clearFiltersText}>Clear filters</Text>
@@ -1401,7 +1491,7 @@ export default function App() {
             </View>
           ) : (
             <FlatList
-              data={filteredEvents}
+              data={sortedScopedEvents}
               renderItem={renderEventItem}
               keyExtractor={item => item.id.toString()}
               contentContainerStyle={styles.list}
@@ -1429,7 +1519,7 @@ export default function App() {
                     title="You are here"
                     pinColor="#3b82f6"
                   />
-                  {filteredEvents.map(event =>
+                  {sortedScopedEvents.map(event =>
                     event.latitude && event.longitude ? (
                       <Marker
                         key={event.id}
@@ -1453,10 +1543,10 @@ export default function App() {
                   )}
                 </MapView>
                 {/* Events without coords — shown as a bottom sheet count */}
-                {filteredEvents.filter(e => !e.latitude || !e.longitude).length > 0 && (
+                {sortedScopedEvents.filter(e => !e.latitude || !e.longitude).length > 0 && (
                   <View style={styles.mapFootnote}>
                     <Text style={styles.mapFootnoteText}>
-                      {filteredEvents.filter(e => !e.latitude || !e.longitude).length} event(s) have no map location — switch to List view to see them all.
+                      {sortedScopedEvents.filter(e => !e.latitude || !e.longitude).length} event(s) have no map location — switch to List view to see them all.
                     </Text>
                   </View>
                 )}
@@ -1561,7 +1651,7 @@ export default function App() {
               onPress={() => setViewMode('list')}
             >
               <Text style={styles.closeButtonText}>
-                Show {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
+                Show {sortedScopedEvents.length} event{sortedScopedEvents.length !== 1 ? 's' : ''}
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -2308,6 +2398,43 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: '#ea580c',
+  },
+  scopeControl: {
+    flexDirection: 'row',
+    marginTop: 10,
+    gap: 8,
+  },
+  sortControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  sortLabel: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  scopeChip: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  scopeChipActive: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#fdba74',
+  },
+  scopeChipText: {
+    color: '#64748b',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  scopeChipTextActive: {
+    color: '#c2410c',
   },
   // ── Map callout ────────────────────────────────────────────────────────────
   callout: {
