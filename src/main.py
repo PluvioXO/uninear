@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.database import Database
 
 # --- MODELS ---
-from src.models import EventCreateSchema, EventUpdateSchema, EventResponseSchema, UserSignupSchema, UserLoginSchema, EventAttendanceSchema
+from src.models import EventCreateSchema, EventUpdateSchema, EventResponseSchema, UserSignupSchema, UserLoginSchema, UserForgotPasswordSchema, EventAttendanceSchema
 
 
 # --- AUTH DEPENDENCY ---
@@ -116,6 +116,8 @@ class UniNearBackend:
         self.app.get("/")(self.read_root)
         self.app.post("/auth/signup")(self.signup)
         self.app.post("/auth/login")(self.login)
+        self.app.post("/auth/forgot-password")(self.forgot_password)
+        self.app.delete("/auth/account", dependencies=[Depends(verify_token)])(self.delete_account)
         self.app.get("/events", response_model=list[EventResponseSchema])(self.get_events)
 
         # Protected endpoints (require valid JWT)
@@ -341,6 +343,8 @@ class UniNearBackend:
                 }
                 for row in attendance_rows
             ]
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -425,6 +429,30 @@ class UniNearBackend:
                 raise HTTPException(status_code=403, detail="Please confirm your email before logging in. Check your inbox for a confirmation link.")
             if "invalid login credentials" in error_msg or "invalid credentials" in error_msg or "user not found" in error_msg:
                 raise HTTPException(status_code=401, detail="Invalid email or password")
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def forgot_password(self, payload: UserForgotPasswordSchema):
+        try:
+            auth = self.db.client.auth
+            if hasattr(auth, "reset_password_for_email"):
+                auth.reset_password_for_email(payload.email)
+            elif hasattr(auth, "reset_password_email"):
+                auth.reset_password_email(payload.email)
+            else:
+                raise RuntimeError("Password reset is not supported by current auth client")
+            return {"message": "If that account exists, a password reset email has been sent."}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def delete_account(self, user: Dict[str, Any] = Depends(verify_token)):
+        try:
+            if not self.db.admin:
+                raise HTTPException(status_code=503, detail="Account deletion is unavailable")
+            self.db.admin.auth.admin.delete_user(user["user_id"])
+            return {"message": "Account deleted successfully"}
+        except HTTPException:
+            raise
+        except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
 # Create the app instance for uvicorn to pick up

@@ -268,7 +268,7 @@ def test_FR16_create_rsvp():
     existing_response.data = []
 
     attendance_response = MagicMock()
-    attendance_response.data = [{"id": 1, "event_id": 1, "user_id": "user-1"}]
+    attendance_response.data = [{"id": 1, "event_id": 1, "user_id": MOCK_USER_ID}]
 
     select_response = MagicMock()
     select_response.data = {"attendee_count": 2, "capacity": 50}
@@ -289,7 +289,7 @@ def test_FR16_create_rsvp():
     with patch_auth_valid():
         with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
             with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
-                payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+                payload: dict[str, Any] = {"event_id": 1, "user_id": MOCK_USER_ID}
                 response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
 
                 assert response.status_code == 201
@@ -309,7 +309,7 @@ def test_FR16_duplicate_rsvp_returns_409():
 
     with patch_auth_valid():
         with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+            payload: dict[str, Any] = {"event_id": 1, "user_id": MOCK_USER_ID}
             response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
 
             assert response.status_code == 409
@@ -334,7 +334,7 @@ def test_FR16_rsvp_at_capacity_returns_400():
 
     with patch_auth_valid():
         with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+            payload: dict[str, Any] = {"event_id": 1, "user_id": MOCK_USER_ID}
             response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
 
             assert response.status_code == 400
@@ -348,7 +348,7 @@ def test_NFR03_rsvp_performance():
     existing_response.data = []
 
     attendance_response = MagicMock()
-    attendance_response.data = [{"id": 1, "event_id": 1, "user_id": "user-1"}]
+    attendance_response.data = [{"id": 1, "event_id": 1, "user_id": MOCK_USER_ID}]
 
     select_response = MagicMock()
     select_response.data = {"attendee_count": 0, "capacity": 50}
@@ -370,7 +370,7 @@ def test_NFR03_rsvp_performance():
         with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
             with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
                 start = time.time()
-                payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+                payload: dict[str, Any] = {"event_id": 1, "user_id": MOCK_USER_ID}
                 response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
                 elapsed = time.time() - start
 
@@ -394,7 +394,7 @@ def test_FR17_cancel_rsvp_decrements_count():
     with patch_auth_valid():
         with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
             with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))) as mock_rpc:
-                payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+                payload: dict[str, Any] = {"event_id": 1, "user_id": MOCK_USER_ID}
                 response = client.request("DELETE", "/events/1/rsvp", json=payload, headers=AUTH_HEADER)
 
                 assert response.status_code == 204
@@ -413,7 +413,7 @@ def test_FR17_cancel_rsvp_not_found():
 
     with patch_auth_valid():
         with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-            payload: dict[str, Any] = {"event_id": 1, "user_id": "user-1"}
+            payload: dict[str, Any] = {"event_id": 1, "user_id": MOCK_USER_ID}
             response = client.request("DELETE", "/events/1/rsvp", json=payload, headers=AUTH_HEADER)
 
             assert response.status_code == 404
@@ -422,7 +422,7 @@ def test_FR17_cancel_rsvp_not_found():
 def test_FR21_get_user_rsvps_with_event_data():
     attendance_response = MagicMock()
     attendance_response.data = [
-        {"id": 1, "event_id": 10, "user_id": "user-1", "created_at": "2025-02-01T10:00:00"}
+        {"id": 1, "event_id": 10, "user_id": MOCK_USER_ID, "created_at": "2025-02-01T10:00:00"}
     ]
 
     events_response = MagicMock()
@@ -441,7 +441,7 @@ def test_FR21_get_user_rsvps_with_event_data():
 
     with patch_auth_valid():
         with patch.object(backend.db.client, 'table', side_effect=table_side_effect):
-            response = client.get("/api/rsvp", params={"user_id": "user-1"}, headers=AUTH_HEADER)
+            response = client.get("/api/rsvp", params={"user_id": MOCK_USER_ID}, headers=AUTH_HEADER)
 
             assert response.status_code == 200
             body = response.json()

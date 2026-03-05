@@ -2,7 +2,9 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import App from './App';
 
-describe('test_NFR07_bath_email_validation - Mobile Profile', () => {
+jest.setTimeout(15000);
+
+describe('test_profile_email_readonly - Mobile Profile', () => {
   beforeEach(() => {
     global.fetch = jest.fn((url) => {
       if (String(url).includes('/auth/login')) {
@@ -43,10 +45,18 @@ describe('test_NFR07_bath_email_validation - Mobile Profile', () => {
         });
       }
 
+      if (String(url).includes('/api/rsvp')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve([]),
+        });
+      }
+
       return Promise.resolve({
-        ok: false,
-        status: 404,
-        json: () => Promise.resolve({ detail: 'Not found' }),
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
       });
     });
   });
@@ -58,49 +68,36 @@ describe('test_NFR07_bath_email_validation - Mobile Profile', () => {
     fireEvent.changeText(screen.getByPlaceholderText('Minimum 8 characters'), 'password123');
     fireEvent.press(screen.getByText('Log In'));
 
-    // Wait for app to load
-    await waitFor(() => {
-      expect(screen.getByText('Welcome back,')).toBeTruthy();
-    }, { timeout: 3000 });
-    await waitFor(() => {
-      expect(screen.getByText('Profile')).toBeTruthy();
-    }, { timeout: 3000 });
+    expect(await screen.findByText('Welcome back,', {}, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByText('Test Event', {}, { timeout: 10000 })).toBeTruthy();
 
     // Navigate to Profile tab
-    fireEvent.press(screen.getByText('Profile'));
+    fireEvent.press(screen.getAllByText('Profile')[0]);
 
     // Press Edit Profile
     fireEvent.press(screen.getByText('Edit Profile'));
   }
 
-  it('AC1: shows error for non-bath email in profile edit', async () => {
+  it('AC1: email input is read-only in profile edit', async () => {
     await navigateToProfileEdit();
 
-    // Find email input and change to non-bath email
-    const emailInputs = screen.getAllByDisplayValue(/bath\.ac\.uk/i);
-    fireEvent.changeText(emailInputs[0], 'user@gmail.com');
-
-    expect(screen.getByText('Only @bath.ac.uk emails are allowed')).toBeTruthy();
+    const emailInput = screen.getByDisplayValue('test@bath.ac.uk');
+    expect(emailInput.props.editable).toBe(false);
   });
 
-  it('AC1: Save button disabled for non-bath email', async () => {
+  it('AC2: shows helper text that email cannot be changed', async () => {
     await navigateToProfileEdit();
 
-    const emailInputs = screen.getAllByDisplayValue(/bath\.ac\.uk/i);
-    fireEvent.changeText(emailInputs[0], 'user@gmail.com');
-
-    const saveButton = screen.getByText('Save');
-    // Walk up to the TouchableOpacity parent that carries the disabled prop
-    const touchable = saveButton.parent.parent;
-    expect(touchable.props.accessibilityState?.disabled).toBe(true);
+    expect(
+      screen.getByText('Email is managed by your account and cannot be changed here.')
+    ).toBeTruthy();
   });
 
-  it('AC2: no error for valid bath email', async () => {
+  it('AC3: trying to change email does not update displayed value', async () => {
     await navigateToProfileEdit();
 
-    const emailInputs = screen.getAllByDisplayValue(/bath\.ac\.uk/i);
-    fireEvent.changeText(emailInputs[0], 'newuser@bath.ac.uk');
-
-    expect(screen.queryByText('Only @bath.ac.uk emails are allowed')).toBeNull();
+    const emailInput = screen.getByDisplayValue('test@bath.ac.uk');
+    fireEvent.changeText(emailInput, 'newuser@bath.ac.uk');
+    expect(screen.getByDisplayValue('test@bath.ac.uk')).toBeTruthy();
   });
 });

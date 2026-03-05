@@ -56,9 +56,8 @@ const resolveApiBaseUrl = () => {
 const API_BASE_URL = resolveApiBaseUrl();
 
 const DEFAULT_PROFILE = {
-  name: 'Student Member',
+  name: 'User',
   email: '',
-  role: 'Student Member',
   avatar: 'https://ui-avatars.com/api/?name=Student+Member&background=ea580c&color=fff&size=128',
   bio: 'Tell people about yourself.',
   location: 'Bath, UK',
@@ -104,6 +103,7 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authPasswordVisible, setAuthPasswordVisible] = useState(false);
   const [authFullName, setAuthFullName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('list'); // 'list', 'map', 'filter'
@@ -133,6 +133,7 @@ export default function App() {
   const [attendees, setAttendees] = useState([]);
   const [attendeesLoading, setAttendeesLoading] = useState(false);
   const [attendeesError, setAttendeesError] = useState('');
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
 
   useEffect(() => {
     if (!authToken) {
@@ -189,7 +190,6 @@ export default function App() {
       profile: {
         name: userName,
         email: user?.email || fallbackEmail,
-        role: 'Student Member',
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=ea580c&color=fff&size=128`,
         bio: 'Tell people about yourself.',
         location: 'Bath, UK',
@@ -322,6 +322,43 @@ export default function App() {
     }
   };
 
+  const submitForgotPassword = async () => {
+    setAuthError('');
+    if (!isBathEmail(authEmail)) {
+      setAuthError('Enter your @bath.ac.uk email first, then tap Forgot password.');
+      return;
+    }
+
+    try {
+      setAuthLoading(true);
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: authEmail.trim().toLowerCase(),
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.detail || payload?.message || 'Unable to send reset email');
+      }
+
+      Alert.alert(
+        'Reset email sent',
+        payload?.message || 'If that account exists, a password reset email has been sent.'
+      );
+    } catch (err) {
+      if (String(err?.message || '').toLowerCase().includes('network request failed')) {
+        setAuthError(`Cannot reach API at ${API_BASE_URL}. Make sure backend is running/redeployed.`);
+      } else {
+        setAuthError(err.message || 'Unable to send password reset email.');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const logout = () => {
     setAuthToken(null);
     setAuthUserId(null);
@@ -330,6 +367,63 @@ export default function App() {
     setAuthMode('login');
     setCurrentTab('events');
     setViewMode('list');
+  };
+
+  const performDeleteAccount = async () => {
+    if (!authToken) {
+      Alert.alert('Not logged in', 'Please log in again.');
+      return;
+    }
+
+    try {
+      setDeleteAccountLoading(true);
+      const response = await fetch(`${API_BASE_URL}/auth/account`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Delete account endpoint not found on server. Deploy backend changes first.');
+        }
+        throw new Error(parseApiErrorDetail(payload, 'Unable to delete account.'));
+      }
+
+      Alert.alert('Account deleted', 'Your account has been permanently deleted.');
+      logout();
+    } catch (err) {
+      Alert.alert('Delete Account Error', err.message || 'Unable to delete your account right now.');
+    } finally {
+      setDeleteAccountLoading(false);
+    }
+  };
+
+  const confirmDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account and cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Final Confirmation',
+              'Are you absolutely sure you want to delete your account?',
+              [
+                { text: 'No', style: 'cancel' },
+                { text: 'Yes, delete', style: 'destructive', onPress: performDeleteAccount },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
   const fetchUserRsvps = async (token = authToken, userId = authUserId) => {
@@ -600,7 +694,6 @@ export default function App() {
   function isBathEmail(email) {
     return /^[^@\s]+@bath\.ac\.uk$/i.test(email);
   }
-  const showEmailError = editForm.email.length > 0 && !isBathEmail(editForm.email);
   const isProfileSaveDisabled = !isBathEmail(editForm.email);
 
   const saveProfile = () => {
@@ -705,15 +798,14 @@ export default function App() {
 
           <Text style={styles.label}>Email</Text>
           <TextInput
-            style={[styles.input, showEmailError && styles.inputError]}
+            style={[styles.input, styles.inputReadOnly]}
             value={editForm.email}
             keyboardType="email-address"
             autoCapitalize="none"
-            onChangeText={(text) => setEditForm({...editForm, email: text})}
+            editable={false}
+            selectTextOnFocus={false}
           />
-          {showEmailError && (
-            <Text style={styles.errorText}>Only @bath.ac.uk emails are allowed</Text>
-          )}
+          <Text style={styles.helperText}>Email is managed by your account and cannot be changed here.</Text>
 
           <Text style={styles.label}>Bio</Text>
           <TextInput
@@ -759,7 +851,6 @@ export default function App() {
       ) : (
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>{userProfile.name}</Text>
-          <Text style={styles.profileRole}>{userProfile.role}</Text>
           <Text style={styles.profileEmail}>{userProfile.email}</Text>
           
           <View style={styles.infoSection}>
@@ -792,6 +883,19 @@ export default function App() {
           >
             <Text style={styles.editProfileButtonText}>Edit Profile</Text>
           </TouchableOpacity>
+
+          <View style={styles.settingsSection}>
+            <Text style={styles.sectionTitle}>Settings</Text>
+            <TouchableOpacity
+              style={[styles.deleteAccountButton, deleteAccountLoading && styles.deleteAccountButtonDisabled]}
+              onPress={confirmDeleteAccount}
+              disabled={deleteAccountLoading}
+            >
+              <Text style={styles.deleteAccountButtonText}>
+                {deleteAccountLoading ? 'Deleting account...' : 'Delete Account'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )
       )}
@@ -950,14 +1054,30 @@ export default function App() {
           />
 
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={authPassword}
-            onChangeText={setAuthPassword}
-            placeholder="Minimum 8 characters"
-            secureTextEntry
-            autoCapitalize="none"
-          />
+          <View style={styles.passwordInputContainer}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              value={authPassword}
+              onChangeText={setAuthPassword}
+              placeholder="Minimum 8 characters"
+              secureTextEntry={!authPasswordVisible}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.passwordToggleButton}
+              onPress={() => setAuthPasswordVisible(prev => !prev)}
+            >
+              <Text style={styles.passwordToggleText}>
+                {authPasswordVisible ? 'Hide' : 'Show'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {authMode === 'login' && (
+            <TouchableOpacity onPress={submitForgotPassword} disabled={authLoading}>
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
 
           {authError.length > 0 && <Text style={styles.errorText}>{authError}</Text>}
 
@@ -1010,7 +1130,6 @@ export default function App() {
           <View>
             <Text style={styles.greeting}>Welcome back,</Text>
             <Text style={styles.userName}>{userProfile.name}</Text>
-            <Text style={styles.userRole}>{userProfile.role}</Text>
           </View>
           <View style={styles.headerActions}>
             <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
@@ -1513,6 +1632,12 @@ const styles = StyleSheet.create({
     color: '#ea580c',
     fontWeight: '600',
   },
+  forgotPasswordText: {
+    marginTop: 10,
+    color: '#ea580c',
+    fontWeight: '600',
+    textAlign: 'right',
+  },
   authButton: {
     backgroundColor: '#ea580c',
     paddingVertical: 16,
@@ -1555,12 +1680,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1a1a1a',
-  },
-  userRole: {
-    fontSize: 12,
-    color: '#ea580c',
-    fontWeight: '600',
-    marginTop: 2,
   },
   avatar: {
     width: 50,
@@ -1998,13 +2117,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
-  profileRole: {
-    fontSize: 14,
-    color: '#ea580c',
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
   profileEmail: {
     fontSize: 14,
     color: '#888',
@@ -2013,6 +2125,12 @@ const styles = StyleSheet.create({
   },
   infoSection: {
     marginBottom: 20,
+  },
+  settingsSection: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    paddingTop: 16,
   },
   sectionTitle: {
     fontSize: 16,
@@ -2057,6 +2175,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
+  deleteAccountButton: {
+    marginTop: 8,
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  deleteAccountButtonDisabled: {
+    opacity: 0.6,
+  },
+  deleteAccountButtonText: {
+    color: '#be123c',
+    fontWeight: '700',
+    fontSize: 15,
+  },
   editForm: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -2077,8 +2212,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eee',
   },
+  passwordInputContainer: {
+    position: 'relative',
+  },
+  passwordInput: {
+    paddingRight: 64,
+  },
+  passwordToggleButton: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
+  passwordToggleText: {
+    color: '#ea580c',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  inputReadOnly: {
+    backgroundColor: '#eef2f7',
+    color: '#64748b',
+  },
   inputError: {
     borderColor: '#ef4444',
+  },
+  helperText: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 4,
   },
   errorText: {
     color: '#ef4444',

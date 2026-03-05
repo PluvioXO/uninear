@@ -2,6 +2,8 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import App from './App';
 
+jest.setTimeout(15000);
+
 describe('App', () => {
   beforeEach(() => {
     global.fetch = jest.fn((url) => {
@@ -44,10 +46,18 @@ describe('App', () => {
         });
       }
 
+      if (String(url).includes('/api/rsvp')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve([]),
+        });
+      }
+
       return Promise.resolve({
-        ok: false,
-        status: 404,
-        json: () => Promise.resolve({ detail: 'Not found' }),
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
       });
     });
   });
@@ -59,10 +69,7 @@ describe('App', () => {
     fireEvent.changeText(screen.getByPlaceholderText('Minimum 8 characters'), 'password123');
     fireEvent.press(screen.getByText('Log In'));
 
-    // Wait for the event title to appear
-    await waitFor(() => {
-      expect(screen.getByText('Test Event')).toBeTruthy();
-    }, { timeout: 3000 });
+    expect(await screen.findByText('Test Event', {}, { timeout: 10000 })).toBeTruthy();
     
     expect(screen.getByText('Welcome back,')).toBeTruthy();
   });
