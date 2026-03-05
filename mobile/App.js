@@ -1,37 +1,75 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Platform, Image, TouchableOpacity, Alert, TextInput, Dimensions, Modal, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, Platform, Image, TouchableOpacity, Alert, TextInput, Dimensions, Modal, ScrollView, NativeModules } from 'react-native';
 
 const SafeAreaView = View;
-import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Calendar from 'expo-calendar';
 
-// API URL — production backend
-const API_URL = 'https://uninear-gvjz.vercel.app/events';
+let MapView = null;
+let Marker = null;
+let Callout = null;
+let PROVIDER_GOOGLE = null;
 
-const MOCK_USER = {
-  name: 'Maximilian Nicholson',
-  email: 'maximilian.nicholson@bath.ac.uk',
+try {
+  const ReactNativeMaps = require('react-native-maps');
+  MapView = ReactNativeMaps.default;
+  Marker = ReactNativeMaps.Marker;
+  Callout = ReactNativeMaps.Callout;
+  PROVIDER_GOOGLE = ReactNativeMaps.PROVIDER_GOOGLE;
+} catch (mapModuleError) {
+  console.warn('react-native-maps is unavailable in this native binary.', mapModuleError);
+}
+
+const resolveDevHostFromMetro = () => {
+  const scriptURL = NativeModules?.SourceCode?.scriptURL;
+  if (!scriptURL) return null;
+  try {
+    return new URL(scriptURL).hostname;
+  } catch {
+    return null;
+  }
+};
+
+const resolveApiBaseUrl = () => {
+  const configuredUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/+$/, '');
+  }
+
+  const hostedFallback = 'https://uninear-gvjz.vercel.app';
+  if (hostedFallback) {
+    return hostedFallback;
+  }
+
+  const metroHost = resolveDevHostFromMetro();
+  if (metroHost) {
+    return `http://${metroHost}:8000`;
+  }
+
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8000';
+  }
+
+  return 'http://localhost:8000';
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
+
+const DEFAULT_PROFILE = {
+  name: 'Student Member',
+  email: '',
   role: 'Student Member',
-  avatar: 'https://ui-avatars.com/api/?name=Maximilian+Nicholson&background=ea580c&color=fff&size=128',
-  bio: 'Computer Science student at University of Bath. Love hackathons and coffee.',
+  avatar: 'https://ui-avatars.com/api/?name=Student+Member&background=ea580c&color=fff&size=128',
+  bio: 'Tell people about yourself.',
   location: 'Bath, UK',
-  interests: ['Coding', 'Hackathons', 'Coffee', 'Music', 'Tech']
+  interests: []
 };
 
 // Mock User Location (Bath, UK)
 const USER_LOCATION = {
-  latitude: 51.3758,
-  longitude: -2.3599
+  latitude: 51.3782,
+  longitude: -2.3264
 };
-
-const MOCK_FRIENDS = [
-  { id: 1, name: 'Alice Johnson', status: 'Studying at Library', avatar: 'https://ui-avatars.com/api/?name=Alice+Johnson&background=ffadad&color=fff' },
-  { id: 2, name: 'Bob Smith', status: 'At the Gym', avatar: 'https://ui-avatars.com/api/?name=Bob+Smith&background=ffd6a5&color=fff' },
-  { id: 3, name: 'Charlie Brown', status: 'In Class', avatar: 'https://ui-avatars.com/api/?name=Charlie+Brown&background=fdffb6&color=fff' },
-  { id: 4, name: 'David Wilson', status: 'Lunch Break', avatar: 'https://ui-avatars.com/api/?name=David+Wilson&background=caffbf&color=fff' },
-  { id: 5, name: 'Eve Davis', status: 'Available', avatar: 'https://ui-avatars.com/api/?name=Eve+Davis&background=9bf6ff&color=fff' },
-];
 
 // Seed societies — these also get created dynamically from event organisers
 const SEED_SOCIETIES = [
@@ -57,17 +95,25 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
 
 export default function App() {
   const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [authToken, setAuthToken] = useState(null);
+  const [authUserId, setAuthUserId] = useState(null);
+  const [authMode, setAuthMode] = useState('login');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authFullName, setAuthFullName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('list'); // 'list', 'map', 'filter'
   const [currentTab, setCurrentTab] = useState('events'); // 'events', 'friends', 'profile'
   const [selectedEvent, setSelectedEvent] = useState(null); // event detail modal
   
   // Profile State
-  const [userProfile, setUserProfile] = useState(MOCK_USER);
+  const [userProfile, setUserProfile] = useState(DEFAULT_PROFILE);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [editForm, setEditForm] = useState(MOCK_USER);
+  const [editForm, setEditForm] = useState(DEFAULT_PROFILE);
   const [profileTab, setProfileTab] = useState('info'); // 'info' | 'following'
 
   // Following State — set of society/organiser IDs
@@ -80,15 +126,39 @@ export default function App() {
   const [selectedMoods, setSelectedMoods] = useState([]);
   const [selectedEnergy, setSelectedEnergy] = useState(null);
   const [minRating, setMinRating] = useState(null);
+  const [friends] = useState([]);
+  const [rsvpEventIds, setRsvpEventIds] = useState(new Set());
+  const [rsvpLoadingIds, setRsvpLoadingIds] = useState(new Set());
+  const [attendeesModalEvent, setAttendeesModalEvent] = useState(null);
+  const [attendees, setAttendees] = useState([]);
+  const [attendeesLoading, setAttendeesLoading] = useState(false);
+  const [attendeesError, setAttendeesError] = useState('');
 
   useEffect(() => {
-    fetchEvents();
-  }, []);
+    if (!authToken) {
+      setEvents([]);
+      setRsvpEventIds(new Set());
+      setLoading(false);
+      return;
+    }
+    fetchEvents(authToken);
+  }, [authToken]);
 
-  const fetchEvents = async () => {
+  useEffect(() => {
+    if (!authToken || !authUserId) return;
+    fetchUserRsvps(authToken, authUserId);
+  }, [authToken, authUserId]);
+
+  const fetchEvents = async (token = authToken) => {
     try {
-      console.log(`Fetching events from: ${API_URL}`);
-      const response = await fetch(API_URL);
+      if (!token) return;
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/events`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
       console.log('Response status:', response.status);
       
       if (!response.ok) {
@@ -107,8 +177,308 @@ export default function App() {
     }
   };
 
-  const handleRSVP = (eventTitle) => {
-    Alert.alert('Success', `You have successfully RSVP'd to ${eventTitle}!`);
+  const parseAuthResponse = (payload, fallbackEmail) => {
+    const session = payload?.session || payload?.data?.session || null;
+    const user = payload?.user || payload?.data?.user || session?.user || null;
+    const accessToken = session?.access_token || payload?.access_token || payload?.data?.access_token || null;
+    const userName = user?.user_metadata?.full_name || user?.full_name || fallbackEmail.split('@')[0];
+
+    return {
+      accessToken,
+      userId: user?.id || null,
+      profile: {
+        name: userName,
+        email: user?.email || fallbackEmail,
+        role: 'Student Member',
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=ea580c&color=fff&size=128`,
+        bio: 'Tell people about yourself.',
+        location: 'Bath, UK',
+        interests: [],
+      },
+    };
+  };
+
+  const getUserIdFromToken = (token) => {
+    try {
+      if (!token || typeof atob !== 'function') return null;
+      const parts = token.split('.');
+      if (parts.length < 2) return null;
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+      const decoded = atob(padded);
+      const payload = JSON.parse(decoded);
+      return payload?.sub || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const parseApiErrorDetail = (payload, fallbackMessage) => {
+    if (!payload) return fallbackMessage;
+    const detail = payload?.detail;
+    if (typeof detail === 'string' && detail.trim().length > 0) return detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0];
+      if (typeof first?.msg === 'string') return first.msg;
+      return 'Request validation failed';
+    }
+    if (typeof payload?.message === 'string' && payload.message.trim().length > 0) return payload.message;
+    return fallbackMessage;
+  };
+
+  const submitLogin = async () => {
+    setAuthError('');
+    if (!isBathEmail(authEmail)) {
+      setAuthError('Only @bath.ac.uk emails are allowed.');
+      return;
+    }
+    if (!authPassword || authPassword.length < 8) {
+      setAuthError('Password must be at least 8 characters.');
+      return;
+    }
+
+    try {
+      setAuthLoading(true);
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: authEmail.trim().toLowerCase(),
+          password: authPassword,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.detail || 'Login failed');
+      }
+
+      const parsed = parseAuthResponse(payload, authEmail.trim().toLowerCase());
+      if (!parsed.accessToken) {
+        throw new Error('Login succeeded but no access token was returned.');
+      }
+
+      const resolvedUserId = parsed.userId || getUserIdFromToken(parsed.accessToken);
+      setAuthToken(parsed.accessToken);
+      setAuthUserId(resolvedUserId);
+      setUserProfile(parsed.profile);
+      setEditForm(parsed.profile);
+      setCurrentTab('events');
+      setViewMode('list');
+      setAuthPassword('');
+    } catch (err) {
+      if (String(err?.message || '').toLowerCase().includes('network request failed')) {
+        setAuthError(`Cannot reach API at ${API_BASE_URL}. Make sure FastAPI is running and reachable from this device.`);
+      } else {
+        setAuthError(err.message || 'Unable to log in.');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const submitSignup = async () => {
+    setAuthError('');
+    if (!authFullName.trim()) {
+      setAuthError('Full name is required.');
+      return;
+    }
+    if (!isBathEmail(authEmail)) {
+      setAuthError('Only @bath.ac.uk emails are allowed.');
+      return;
+    }
+    if (!authPassword || authPassword.length < 8) {
+      setAuthError('Password must be at least 8 characters.');
+      return;
+    }
+
+    try {
+      setAuthLoading(true);
+      const signupResponse = await fetch(`${API_BASE_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: authFullName.trim(),
+          email: authEmail.trim().toLowerCase(),
+          password: authPassword,
+        }),
+      });
+
+      const signupPayload = await signupResponse.json();
+      if (!signupResponse.ok) {
+        throw new Error(signupPayload?.detail || 'Signup failed');
+      }
+
+      Alert.alert('Account created', 'Your account has been created. Logging you in now...');
+      await submitLogin();
+    } catch (err) {
+      if (String(err?.message || '').toLowerCase().includes('network request failed')) {
+        setAuthError(`Cannot reach API at ${API_BASE_URL}. Make sure FastAPI is running and reachable from this device.`);
+      } else {
+        setAuthError(err.message || 'Unable to create account.');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const logout = () => {
+    setAuthToken(null);
+    setAuthUserId(null);
+    setEvents([]);
+    setAuthPassword('');
+    setAuthMode('login');
+    setCurrentTab('events');
+    setViewMode('list');
+  };
+
+  const fetchUserRsvps = async (token = authToken, userId = authUserId) => {
+    try {
+      if (!token) return;
+      const resolvedUserId = userId || getUserIdFromToken(token);
+      if (!resolvedUserId) return;
+      const response = await fetch(`${API_BASE_URL}/api/rsvp?user_id=${encodeURIComponent(resolvedUserId)}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        setRsvpEventIds(new Set());
+        return;
+      }
+      const data = await response.json();
+      const ids = new Set(
+        (Array.isArray(data) ? data : [])
+          .map((row) => row?.event_id)
+          .filter((id) => typeof id === 'number')
+      );
+      setRsvpEventIds(ids);
+    } catch (err) {
+      setRsvpEventIds(new Set());
+    }
+  };
+
+  const handleRSVP = async (event) => {
+    if (!authToken) {
+      Alert.alert('Not logged in', 'Please log in again.');
+      return;
+    }
+    const resolvedUserId = authUserId || getUserIdFromToken(authToken);
+    if (!resolvedUserId) {
+      Alert.alert('RSVP Error', 'Could not determine your user identity. Please log out and log in again.');
+      return;
+    }
+
+    const eventId = event.id;
+    const isAlreadyRsvped = rsvpEventIds.has(eventId);
+
+    setRsvpLoadingIds((prev) => new Set(prev).add(eventId));
+    try {
+      if (isAlreadyRsvped) {
+        const response = await fetch(`${API_BASE_URL}/events/${eventId}/rsvp`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            event_id: eventId,
+            user_id: resolvedUserId,
+          }),
+        });
+
+        if (!response.ok && response.status !== 204) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(parseApiErrorDetail(payload, 'Failed to cancel RSVP'));
+        }
+
+        setRsvpEventIds((prev) => {
+          const next = new Set(prev);
+          next.delete(eventId);
+          return next;
+        });
+        setEvents((prev) =>
+          prev.map((e) =>
+            e.id === eventId
+              ? { ...e, attendee_count: Math.max(0, (e.attendee_count || 0) - 1) }
+              : e
+          )
+        );
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/rsvp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          event_id: eventId,
+          user_id: resolvedUserId,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        const detail = parseApiErrorDetail(payload, 'Failed to RSVP');
+        if (response.status === 409 && String(detail).toLowerCase().includes('already rsvp')) {
+          setRsvpEventIds((prev) => new Set(prev).add(eventId));
+          return;
+        }
+        throw new Error(detail);
+      }
+
+      setRsvpEventIds((prev) => new Set(prev).add(eventId));
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === eventId
+            ? { ...e, attendee_count: (e.attendee_count || 0) + 1 }
+            : e
+        )
+      );
+    } catch (err) {
+      Alert.alert('RSVP Error', err.message || 'Unable to update RSVP right now.');
+    } finally {
+      setRsvpLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(eventId);
+        return next;
+      });
+    }
+  };
+
+  const openAttendees = async (event) => {
+    if (!authToken) {
+      Alert.alert('Not logged in', 'Please log in again.');
+      return;
+    }
+
+    setAttendeesModalEvent(event);
+    setAttendees([]);
+    setAttendeesError('');
+    setAttendeesLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/events/${event.id}/rsvps`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.detail || `Failed to load attendees (${response.status})`);
+      }
+
+      const data = await response.json();
+      setAttendees(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setAttendeesError(err.message || 'Unable to load attendees right now.');
+    } finally {
+      setAttendeesLoading(false);
+    }
   };
 
   const toggleMood = (mood) => {
@@ -227,7 +597,9 @@ export default function App() {
     </View>
   );
 
-  const isBathEmail = (email) => /^[^@\s]+@bath\.ac\.uk$/i.test(email);
+  function isBathEmail(email) {
+    return /^[^@\s]+@bath\.ac\.uk$/i.test(email);
+  }
   const showEmailError = editForm.email.length > 0 && !isBathEmail(editForm.email);
   const isProfileSaveDisabled = !isBathEmail(editForm.email);
 
@@ -264,7 +636,7 @@ export default function App() {
         </TouchableOpacity>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{MOCK_FRIENDS.length}</Text>
+          <Text style={styles.statNumber}>{friends.length}</Text>
           <Text style={styles.statLabel}>Friends</Text>
         </View>
       </View>
@@ -460,6 +832,8 @@ export default function App() {
   const renderEventItem = ({ item }) => {
     const societyId = item.organizer ? item.organizer.toLowerCase().replace(/\s+/g, '-') : null;
     const isFollowing = societyId ? followedIds.has(societyId) : false;
+    const isRsvped = rsvpEventIds.has(item.id);
+    const isRsvpLoading = rsvpLoadingIds.has(item.id);
 
     return (
     <View style={styles.card}>
@@ -510,6 +884,18 @@ export default function App() {
         </Text>
       )}
 
+      <View style={styles.attendanceRow}>
+        <Text style={styles.attendanceText}>
+          👥 {(item.attendee_count || 0)} / {(item.capacity || 0)} attending
+        </Text>
+        <TouchableOpacity
+          style={styles.inviteChip}
+          onPress={() => openAttendees(item)}
+        >
+          <Text style={styles.inviteChipText}>People</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.calendarButton}
@@ -518,15 +904,87 @@ export default function App() {
           <Text style={styles.calendarButtonText}>Add to Calendar</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={styles.rsvpButton}
-          onPress={() => handleRSVP(item.title)}
+          style={[styles.rsvpButton, isRsvped && styles.rsvpButtonSecondary]}
+          onPress={() => handleRSVP(item)}
+          disabled={isRsvpLoading}
         >
-          <Text style={styles.rsvpButtonText}>RSVP</Text>
+          <Text style={[styles.rsvpButtonText, isRsvped && styles.rsvpButtonSecondaryText]}>
+            {isRsvpLoading ? 'Please wait...' : isRsvped ? 'Cancel RSVP' : 'RSVP'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
   };
+
+  if (!authToken) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.authContainer}>
+          <Text style={styles.authTitle}>UniNear</Text>
+          <Text style={styles.authSubtitle}>
+            {authMode === 'login' ? 'Log in to continue' : 'Create your account'}
+          </Text>
+
+          {authMode === 'signup' && (
+            <>
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput
+                style={styles.input}
+                value={authFullName}
+                onChangeText={setAuthFullName}
+                placeholder="Your full name"
+                autoCapitalize="words"
+              />
+            </>
+          )}
+
+          <Text style={styles.label}>Bath Email</Text>
+          <TextInput
+            style={styles.input}
+            value={authEmail}
+            onChangeText={setAuthEmail}
+            placeholder="you@bath.ac.uk"
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            style={styles.input}
+            value={authPassword}
+            onChangeText={setAuthPassword}
+            placeholder="Minimum 8 characters"
+            secureTextEntry
+            autoCapitalize="none"
+          />
+
+          {authError.length > 0 && <Text style={styles.errorText}>{authError}</Text>}
+
+          <TouchableOpacity
+            style={[styles.authButton, authLoading && styles.authButtonDisabled]}
+            onPress={authMode === 'login' ? submitLogin : submitSignup}
+            disabled={authLoading}
+          >
+            <Text style={styles.authButtonText}>
+              {authLoading ? 'Please wait...' : authMode === 'login' ? 'Log In' : 'Create Account'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              setAuthError('');
+              setAuthMode(authMode === 'login' ? 'signup' : 'login');
+            }}
+          >
+            <Text style={styles.authToggleText}>
+              {authMode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (
@@ -551,10 +1009,15 @@ export default function App() {
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.userName}>{MOCK_USER.name}</Text>
-            <Text style={styles.userRole}>{MOCK_USER.role}</Text>
+            <Text style={styles.userName}>{userProfile.name}</Text>
+            <Text style={styles.userRole}>{userProfile.role}</Text>
           </View>
-          <Image source={{ uri: MOCK_USER.avatar }} style={styles.avatar} />
+          <View style={styles.headerActions}>
+            <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
+            <TouchableOpacity onPress={logout} style={styles.logoutButton}>
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         
         <View style={styles.controls}>
@@ -624,6 +1087,9 @@ export default function App() {
                   {new Date(selectedEvent.start_time || selectedEvent.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
                 <Text style={styles.modalLocation}>📍 {selectedEvent.location}</Text>
+                <Text style={styles.modalAttendeeCount}>
+                  👥 {(selectedEvent.attendee_count || 0)} / {(selectedEvent.capacity || 0)} attending
+                </Text>
                 {selectedEvent.organizer && (
                   <Text style={styles.modalOrganizer}>Hosted by {selectedEvent.organizer}</Text>
                 )}
@@ -632,10 +1098,20 @@ export default function App() {
                 )}
                 <View style={styles.modalActions}>
                   <TouchableOpacity
-                    style={styles.closeButton}
-                    onPress={() => { handleRSVP(selectedEvent.title); setSelectedEvent(null); }}
+                    style={[
+                      styles.closeButton,
+                      rsvpEventIds.has(selectedEvent.id) && styles.modalSecondaryButton,
+                    ]}
+                    onPress={() => { handleRSVP(selectedEvent); setSelectedEvent(null); }}
                   >
-                    <Text style={styles.closeButtonText}>RSVP</Text>
+                    <Text
+                      style={[
+                        styles.closeButtonText,
+                        rsvpEventIds.has(selectedEvent.id) && styles.modalSecondaryButtonText,
+                      ]}
+                    >
+                      {rsvpEventIds.has(selectedEvent.id) ? 'Cancel RSVP' : 'RSVP'}
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.modalSecondaryButton}
@@ -753,6 +1229,45 @@ export default function App() {
         </View>
       </Modal>
 
+      <Modal
+        visible={attendeesModalEvent !== null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setAttendeesModalEvent(null)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {attendeesModalEvent ? `${attendeesModalEvent.title} Attendees` : 'Attendees'}
+            </Text>
+            {attendeesLoading ? (
+              <View style={styles.center}>
+                <ActivityIndicator size="small" color="#ea580c" />
+              </View>
+            ) : attendeesError ? (
+              <Text style={styles.error}>{attendeesError}</Text>
+            ) : attendees.length === 0 ? (
+              <Text style={styles.emptyStateText}>No attendees yet.</Text>
+            ) : (
+              <ScrollView style={styles.attendeesList}>
+                {attendees.map((person, index) => (
+                  <View key={`${person.user_id || 'user'}-${index}`} style={styles.attendeeRow}>
+                    <Text style={styles.attendeeName}>{person.name || 'Member'}</Text>
+                    <Text style={styles.attendeeMeta}>{person.email || person.user_id}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setAttendeesModalEvent(null)}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {currentTab === 'events' ? (
         viewMode === 'list' ? (
           filteredEvents.length === 0 ? (
@@ -777,51 +1292,61 @@ export default function App() {
           )
         ) : viewMode === 'map' ? (
           <View style={styles.mapContainer}>
-            <MapView
-              provider={PROVIDER_GOOGLE}
-              style={styles.map}
-              initialRegion={{
-                latitude: 51.3758,
-                longitude: -2.3599,
-                latitudeDelta: 0.05,
-                longitudeDelta: 0.05,
-              }}
-            >
-              {/* User location marker */}
-              <Marker
-                coordinate={USER_LOCATION}
-                title="You are here"
-                pinColor="#3b82f6"
-              />
-              {filteredEvents.map(event =>
-                event.latitude && event.longitude ? (
+            {MapView && Marker && Callout ? (
+              <>
+                <MapView
+                  provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                  style={styles.map}
+                  initialRegion={{
+                    latitude: 51.3782,
+                    longitude: -2.3264,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  }}
+                >
+                  {/* User location marker */}
                   <Marker
-                    key={event.id}
-                    coordinate={{ latitude: event.latitude, longitude: event.longitude }}
-                    pinColor="#ea580c"
-                  >
-                    <Callout tooltip onPress={() => setSelectedEvent(event)}>
-                      <View style={styles.callout}>
-                        <Text style={styles.calloutTitle} numberOfLines={2}>{event.title}</Text>
-                        <Text style={styles.calloutDate}>
-                          {new Date(event.start_time || event.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                          {' · '}
-                          {new Date(event.start_time || event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                        <Text style={styles.calloutLocation} numberOfLines={1}>📍 {event.location}</Text>
-                        <Text style={styles.calloutTap}>Tap for details →</Text>
-                      </View>
-                    </Callout>
-                  </Marker>
-                ) : null
-              )}
-            </MapView>
-            {/* Events without coords — shown as a bottom sheet count */}
-            {filteredEvents.filter(e => !e.latitude || !e.longitude).length > 0 && (
-              <View style={styles.mapFootnote}>
-                <Text style={styles.mapFootnoteText}>
-                  {filteredEvents.filter(e => !e.latitude || !e.longitude).length} event(s) have no map location — switch to List view to see them all.
-                </Text>
+                    coordinate={USER_LOCATION}
+                    title="You are here"
+                    pinColor="#3b82f6"
+                  />
+                  {filteredEvents.map(event =>
+                    event.latitude && event.longitude ? (
+                      <Marker
+                        key={event.id}
+                        coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+                        pinColor="#ea580c"
+                      >
+                        <Callout tooltip onPress={() => setSelectedEvent(event)}>
+                          <View style={styles.callout}>
+                            <Text style={styles.calloutTitle} numberOfLines={2}>{event.title}</Text>
+                            <Text style={styles.calloutDate}>
+                              {new Date(event.start_time || event.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                              {' · '}
+                              {new Date(event.start_time || event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                            <Text style={styles.calloutLocation} numberOfLines={1}>📍 {event.location}</Text>
+                            <Text style={styles.calloutTap}>Tap for details →</Text>
+                          </View>
+                        </Callout>
+                      </Marker>
+                    ) : null
+                  )}
+                </MapView>
+                {/* Events without coords — shown as a bottom sheet count */}
+                {filteredEvents.filter(e => !e.latitude || !e.longitude).length > 0 && (
+                  <View style={styles.mapFootnote}>
+                    <Text style={styles.mapFootnoteText}>
+                      {filteredEvents.filter(e => !e.latitude || !e.longitude).length} event(s) have no map location — switch to List view to see them all.
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.mapUnavailable}>
+                <Text style={styles.emptyStateIcon}>🗺️</Text>
+                <Text style={styles.emptyStateText}>Map module not found in this iOS build.</Text>
+                <Text style={styles.emptyStateSubText}>Rebuild the app binary after installing dependencies.</Text>
               </View>
             )}
           </View>
@@ -924,7 +1449,7 @@ export default function App() {
         )
       ) : currentTab === 'friends' ? (
         <FlatList
-          data={MOCK_FRIENDS}
+          data={friends}
           renderItem={renderFriendItem}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.list}
@@ -964,13 +1489,54 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 24 : 0,
+    backgroundColor: '#fff',
+  },
+  authTitle: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#ea580c',
+    marginBottom: 8,
+  },
+  authSubtitle: {
+    fontSize: 16,
+    color: '#4b5563',
+    marginBottom: 20,
+  },
+  authToggleText: {
+    textAlign: 'center',
+    marginTop: 14,
+    color: '#ea580c',
+    fontWeight: '600',
+  },
+  authButton: {
+    backgroundColor: '#ea580c',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  authButtonDisabled: {
+    backgroundColor: '#94a3b8',
+  },
+  authButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   header: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: Platform.OS === 'ios' ? 56 : 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
@@ -1002,6 +1568,23 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     borderWidth: 2,
     borderColor: '#ea580c',
+  },
+  headerActions: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  logoutButton: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  logoutButtonText: {
+    color: '#c2410c',
+    fontSize: 12,
+    fontWeight: '700',
   },
   headerTitle: {
     fontSize: 24,
@@ -1062,6 +1645,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  mapUnavailable: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
   list: {
     padding: 16,
   },
@@ -1106,6 +1695,29 @@ const styles = StyleSheet.create({
     borderTopColor: '#f0f0f0',
     paddingTop: 12,
   },
+  attendanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  attendanceText: {
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  inviteChip: {
+    borderWidth: 1,
+    borderColor: '#ea580c',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  inviteChipText: {
+    color: '#ea580c',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   calendarButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1129,10 +1741,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
   },
+  rsvpButtonSecondary: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ea580c',
+  },
   rsvpButtonText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  rsvpButtonSecondaryText: {
+    color: '#ea580c',
   },
   error: {
     color: 'red',
@@ -1159,6 +1779,30 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
+  },
+  modalAttendeeCount: {
+    color: '#475569',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  attendeesList: {
+    maxHeight: 280,
+    marginBottom: 12,
+  },
+  attendeeRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  attendeeName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  attendeeMeta: {
+    marginTop: 2,
+    fontSize: 13,
+    color: '#64748b',
   },
   filterSection: {
     marginBottom: 20,

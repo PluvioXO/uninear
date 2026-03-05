@@ -225,12 +225,16 @@ class UniNearBackend:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    def create_rsvp(self, attendance: EventAttendanceSchema) -> JSONResponse:
+    def create_rsvp(self, attendance: EventAttendanceSchema, user: Dict[str, Any] = Depends(verify_token)) -> JSONResponse:
         event_id = attendance.event_id
         try:
+            if attendance.user_id != user["user_id"]:
+                raise HTTPException(status_code=403, detail="Cannot RSVP for another user")
+            db = self.db.admin or self.db.client
+
             # SCRUM-348: Check for duplicate RSVP
             existing = (
-                self.db.client
+                db
                 .table("event_attendance")
                 .select("id")
                 .eq("event_id", event_id)
@@ -242,7 +246,7 @@ class UniNearBackend:
 
             # SCRUM-349: Check capacity
             event_response = (
-                self.db.client
+                db
                 .table("events")
                 .select("attendee_count, capacity")
                 .eq("id", event_id)
@@ -257,10 +261,10 @@ class UniNearBackend:
                 raise HTTPException(status_code=400, detail="Event is full")
 
             payload: Dict[str, Any] = {"event_id": event_id, "user_id": attendance.user_id}
-            response = self.db.client.table("event_attendance").insert(payload).execute()
+            response = db.table("event_attendance").insert(payload).execute()
 
             # Atomic increment via RPC (prevents race conditions)
-            self.db.client.rpc("increment_attendee_count", {"p_event_id": event_id}).execute()
+            db.rpc("increment_attendee_count", {"p_event_id": event_id}).execute()
 
             response_data = cast(list[Dict[str, Any]], response.data) if response.data else []
             result = response_data[0] if response_data else {"event_id": event_id, "user_id": attendance.user_id}
@@ -273,13 +277,16 @@ class UniNearBackend:
                 raise HTTPException(status_code=409, detail="Already RSVP'd")
             raise HTTPException(status_code=400, detail=str(e))
 
-    def cancel_rsvp(self, event_id: int, attendance: EventAttendanceSchema):
+    def cancel_rsvp(self, event_id: int, attendance: EventAttendanceSchema, user: Dict[str, Any] = Depends(verify_token)):
         try:
             if attendance.event_id != event_id:
                 raise HTTPException(status_code=400, detail="Event ID mismatch")
+            if attendance.user_id != user["user_id"]:
+                raise HTTPException(status_code=403, detail="Cannot cancel RSVP for another user")
+            db = self.db.admin or self.db.client
 
             delete_response = (
-                self.db.client
+                db
                 .table("event_attendance")
                 .delete()
                 .eq("event_id", event_id)
@@ -291,7 +298,7 @@ class UniNearBackend:
                 raise HTTPException(status_code=404, detail="RSVP not found")
 
             # Atomic decrement via RPC (prevents race conditions)
-            self.db.client.rpc("decrement_attendee_count", {"p_event_id": event_id}).execute()
+            db.rpc("decrement_attendee_count", {"p_event_id": event_id}).execute()
 
             return Response(status_code=204)
         except HTTPException:
@@ -299,10 +306,13 @@ class UniNearBackend:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    def get_rsvps(self, user_id: str = Query(..., min_length=1)) -> list[Dict[str, Any]]:
+    def get_rsvps(self, user_id: str = Query(..., min_length=1), user: Dict[str, Any] = Depends(verify_token)) -> list[Dict[str, Any]]:
         try:
+            if user_id != user["user_id"]:
+                raise HTTPException(status_code=403, detail="Cannot view RSVPs for another user")
+            db = self.db.admin or self.db.client
             attendance_response = (
-                self.db.client
+                db
                 .table("event_attendance")
                 .select("id, event_id, user_id, created_at")
                 .eq("user_id", user_id)
@@ -315,7 +325,7 @@ class UniNearBackend:
 
             event_ids = [row.get("event_id") for row in attendance_rows if row.get("event_id") is not None]
             events_response = (
-                self.db.client
+                db
                 .table("events")
                 .select("*")
                 .in_("id", event_ids)
