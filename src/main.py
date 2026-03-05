@@ -253,7 +253,7 @@ class UniNearBackend:
             current_count = int(event_data.get("attendee_count") or 0)
             capacity = int(event_data.get("capacity") or 0)
 
-            if current_count >= capacity:
+            if capacity > 0 and current_count >= capacity:
                 raise HTTPException(status_code=400, detail="Event is full")
 
             payload: Dict[str, Any] = {"event_id": event_id, "user_id": attendance.user_id}

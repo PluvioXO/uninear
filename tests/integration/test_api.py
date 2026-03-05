@@ -340,7 +340,82 @@ def test_FR16_rsvp_at_capacity_returns_400():
             assert response.status_code == 400
             assert "Event is full" in response.json()["detail"]
 
-# 6d. test_NFR03_rsvp_performance — RSVP completes within 1 second
+# 6d. test_FR11_capacity_limits — capacity saved, RSVP blocked at capacity, unlimited when 0
+def test_FR11_capacity_limits():
+    """FR-11: Capacity saved on creation, RSVP blocked at capacity, unlimited when capacity=0."""
+    # --- Part 1: capacity is saved with event creation ---
+    mock_create_response = MagicMock()
+    mock_create_response.data = [{"id": 10, "title": "Capped Event", "capacity": 30, "status": "Draft"}]
+
+    create_payload: dict[str, Any] = {
+        "title": "Capped Event",
+        "date": "2025-12-01T10:00:00",
+        "location": "Room A",
+        "capacity": 30,
+    }
+
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.insert.return_value.execute.return_value = mock_create_response
+
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
+            response = client.post("/events", json=create_payload, headers=AUTH_HEADER)
+            assert response.status_code == 200
+            inserted = mock_admin.table.return_value.insert.call_args[0][0]
+            assert inserted["capacity"] == 30
+
+    # --- Part 2: RSVP blocked when at capacity ---
+    existing_response = MagicMock()
+    existing_response.data = []
+
+    at_cap_response = MagicMock()
+    at_cap_response.data = {"attendee_count": 30, "capacity": 30}
+
+    attendance_table = MagicMock()
+    attendance_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
+
+    events_table = MagicMock()
+    events_table.select.return_value.eq.return_value.single.return_value.execute.return_value = at_cap_response
+
+    def table_at_cap(name: str):
+        return attendance_table if name == "event_attendance" else events_table
+
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_at_cap):
+            payload: dict[str, Any] = {"event_id": 10, "user_id": "user-1"}
+            response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
+            assert response.status_code == 400
+            assert "Event is full" in response.json()["detail"]
+
+    # --- Part 3: unlimited capacity (capacity=0) allows RSVP ---
+    unlimited_response = MagicMock()
+    unlimited_response.data = {"attendee_count": 500, "capacity": 0}
+
+    attendance_insert_response = MagicMock()
+    attendance_insert_response.data = [{"id": 99, "event_id": 10, "user_id": "user-1"}]
+
+    rpc_response = MagicMock()
+    rpc_response.data = 501
+
+    unlimited_attendance = MagicMock()
+    unlimited_attendance.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
+    unlimited_attendance.insert.return_value.execute.return_value = attendance_insert_response
+
+    unlimited_events = MagicMock()
+    unlimited_events.select.return_value.eq.return_value.single.return_value.execute.return_value = unlimited_response
+
+    def table_unlimited(name: str):
+        return unlimited_attendance if name == "event_attendance" else unlimited_events
+
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_unlimited):
+            with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
+                payload = {"event_id": 10, "user_id": "user-1"}
+                response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
+                assert response.status_code == 201, f"Expected 201 for unlimited capacity, got {response.status_code}: {response.json()}"
+
+
+# 6e. test_NFR03_rsvp_performance — RSVP completes within 1 second
 def test_NFR03_rsvp_performance():
     import time
 

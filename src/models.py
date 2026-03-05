@@ -7,7 +7,7 @@ class EventCreateSchema(BaseModel):
     description: Optional[str] = None
     date: datetime  # Frontend sends 'date'
     location: str
-    capacity: int
+    capacity: int = 0
     status: str = "Draft"
     organizer: Optional[str] = None
     

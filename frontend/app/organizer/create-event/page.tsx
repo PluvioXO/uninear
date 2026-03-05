@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { createEvent } from '@/lib/api';
 
 export default function CreateEventPage() {
   const router = useRouter();
@@ -17,16 +18,38 @@ export default function CreateEventPage() {
     energy: 'Medium',
     length: ''
   });
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would typically send the data to your backend
-    console.log('Event Data:', {
-      ...formData,
-      moods: formData.moods.split(',').map(s => s.trim())
-    });
-    alert('Event Created Successfully! (Mock)');
-    router.push('/organizer');
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      const dateTime = `${formData.date}T${formData.time}:00`;
+      const res = await createEvent({
+        title: formData.title,
+        date: new Date(dateTime).toISOString(),
+        location: formData.location,
+        capacity: Number(formData.capacity) || 0,
+        description: formData.description || undefined,
+        mood_tags: formData.moods ? formData.moods.split(',').map(s => s.trim()) : [],
+        energy_level: formData.energy,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.detail ?? 'Failed to create event. Please try again.');
+        return;
+      }
+
+      router.push('/organizer');
+    } catch {
+      setError('Network error. Please check your connection.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -104,8 +127,9 @@ export default function CreateEventPage() {
                 onChange={handleChange}
                 className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
                 placeholder="e.g. 100"
-                required
+                min={0}
               />
+              <p className="text-xs text-gray-400 mt-1">Leave blank for unlimited capacity</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-500 mb-2">Length</label>
@@ -158,16 +182,20 @@ export default function CreateEventPage() {
               rows={4}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
               placeholder="Describe your event..."
-              required
             />
           </div>
+
+          {error && (
+            <p className="text-red-600 text-sm">{error}</p>
+          )}
 
           <div className="pt-4">
             <button
               type="submit"
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-orange-200"
+              disabled={isSubmitting}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-orange-200 disabled:opacity-50"
             >
-              Create Event
+              {isSubmitting ? 'Creating...' : 'Create Event'}
             </button>
           </div>
         </form>
