@@ -262,6 +262,69 @@ def test_update_event():
             assert response.status_code == 200
             assert response.json()[0]["title"] == "Updated Title"
 
+# 5b. test_FR10_get_organizer_events — organiser sees own Draft + Published events
+def test_FR10_get_organizer_events():
+    """FR-10: GET /api/organizer/events returns all events for the authenticated organiser."""
+    mock_response = MagicMock()
+    mock_response.data = [
+        {"id": 1, "title": "Draft Event", "status": "Draft", "organiser_id": MOCK_USER_ID},
+        {"id": 2, "title": "Published Event", "status": "Published", "organiser_id": MOCK_USER_ID},
+    ]
+
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_response
+
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
+            response = client.get("/api/organizer/events", headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+            events = response.json()
+            assert len(events) == 2
+            statuses = [e["status"] for e in events]
+            assert "Draft" in statuses
+            assert "Published" in statuses
+            mock_admin.table.return_value.select.return_value.eq.assert_called_once_with("organiser_id", MOCK_USER_ID)
+
+
+# 5c. test_FR10_publish_event — status update to Published, visible in GET /events
+def test_FR10_publish_event():
+    """FR-10: Organiser publishes draft event, status changes to Published."""
+    # Part 1: PATCH /events/{id} updates status to "Published"
+    mock_update_response = MagicMock()
+    mock_update_response.data = [{"id": 1, "title": "My Event", "status": "Published"}]
+
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table') as mock_table:
+            mock_table.return_value.update.return_value.eq.return_value.execute.return_value = mock_update_response
+
+            response = client.patch("/events/1", json={"status": "Published"}, headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+            assert response.json()[0]["status"] == "Published"
+            mock_table.return_value.update.assert_called_once_with({"status": "Published"})
+
+    # Part 2: GET /events returns the published event (RLS filters at DB level)
+    mock_get_response = MagicMock()
+    mock_get_response.data = [
+        {"id": 1, "title": "My Event", "status": "Published",
+         "description": None, "location": "Test Hall", "start_time": "2099-01-01T10:00:00+00:00",
+         "capacity": 100, "attendee_count": 5, "organizer": None,
+         "latitude": None, "longitude": None},
+    ]
+
+    with patch.object(backend.db.client, 'table') as mock_table:
+        chain = mock_table.return_value.select.return_value
+        chain.eq.return_value.gte.return_value.order.return_value.execute.return_value = mock_get_response
+
+        response = client.get("/events")
+
+        assert response.status_code == 200
+        events = response.json()
+        assert len(events) == 1
+        assert events[0]["status"] == "Published"
+
+
 # 6. test_FR16_create_rsvp — RSVP creates record and returns 201
 def test_FR16_create_rsvp():
     existing_response = MagicMock()
@@ -340,7 +403,82 @@ def test_FR16_rsvp_at_capacity_returns_400():
             assert response.status_code == 400
             assert "Event is full" in response.json()["detail"]
 
-# 6d. test_NFR03_rsvp_performance — RSVP completes within 1 second
+# 6d. test_FR11_capacity_limits — capacity saved, RSVP blocked at capacity, unlimited when 0
+def test_FR11_capacity_limits():
+    """FR-11: Capacity saved on creation, RSVP blocked at capacity, unlimited when capacity=0."""
+    # --- Part 1: capacity is saved with event creation ---
+    mock_create_response = MagicMock()
+    mock_create_response.data = [{"id": 10, "title": "Capped Event", "capacity": 30, "status": "Draft"}]
+
+    create_payload: dict[str, Any] = {
+        "title": "Capped Event",
+        "date": "2025-12-01T10:00:00",
+        "location": "Room A",
+        "capacity": 30,
+    }
+
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.insert.return_value.execute.return_value = mock_create_response
+
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
+            response = client.post("/events", json=create_payload, headers=AUTH_HEADER)
+            assert response.status_code == 200
+            inserted = mock_admin.table.return_value.insert.call_args[0][0]
+            assert inserted["capacity"] == 30
+
+    # --- Part 2: RSVP blocked when at capacity ---
+    existing_response = MagicMock()
+    existing_response.data = []
+
+    at_cap_response = MagicMock()
+    at_cap_response.data = {"attendee_count": 30, "capacity": 30}
+
+    attendance_table = MagicMock()
+    attendance_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
+
+    events_table = MagicMock()
+    events_table.select.return_value.eq.return_value.single.return_value.execute.return_value = at_cap_response
+
+    def table_at_cap(name: str):
+        return attendance_table if name == "event_attendance" else events_table
+
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_at_cap):
+            payload: dict[str, Any] = {"event_id": 10, "user_id": "user-1"}
+            response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
+            assert response.status_code == 400
+            assert "Event is full" in response.json()["detail"]
+
+    # --- Part 3: unlimited capacity (capacity=0) allows RSVP ---
+    unlimited_response = MagicMock()
+    unlimited_response.data = {"attendee_count": 500, "capacity": 0}
+
+    attendance_insert_response = MagicMock()
+    attendance_insert_response.data = [{"id": 99, "event_id": 10, "user_id": "user-1"}]
+
+    rpc_response = MagicMock()
+    rpc_response.data = 501
+
+    unlimited_attendance = MagicMock()
+    unlimited_attendance.select.return_value.eq.return_value.eq.return_value.execute.return_value = existing_response
+    unlimited_attendance.insert.return_value.execute.return_value = attendance_insert_response
+
+    unlimited_events = MagicMock()
+    unlimited_events.select.return_value.eq.return_value.single.return_value.execute.return_value = unlimited_response
+
+    def table_unlimited(name: str):
+        return unlimited_attendance if name == "event_attendance" else unlimited_events
+
+    with patch_auth_valid():
+        with patch.object(backend.db.client, 'table', side_effect=table_unlimited):
+            with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
+                payload = {"event_id": 10, "user_id": "user-1"}
+                response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
+                assert response.status_code == 201, f"Expected 201 for unlimited capacity, got {response.status_code}: {response.json()}"
+
+
+# 6e. test_NFR03_rsvp_performance — RSVP completes within 1 second
 def test_NFR03_rsvp_performance():
     import time
 
@@ -647,6 +785,7 @@ def test_NFR10_no_token_returns_401():
         ("DELETE", "/events/1/rsvp", rsvp_payload),
         ("GET", "/api/rsvp?user_id=u1", None),
         ("GET", "/api/events/1/rsvps", None),
+        ("GET", "/api/organizer/events", None),
     ]
 
     for method, path, body in protected_requests:

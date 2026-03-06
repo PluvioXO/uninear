@@ -114,8 +114,9 @@ export default function DashboardPage() {
   const totalMembers = 1248; // Static for now
   const activeEventsCount = events.length;
   const totalAttendees = events.reduce((acc, curr) => acc + curr.attendees, 0);
-  const avgAttendance = events.length > 0
-    ? Math.round(events.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / events.length * 100)
+  const eventsWithCapacity = events.filter(e => e.capacity > 0);
+  const avgAttendance = eventsWithCapacity.length > 0
+    ? Math.round(eventsWithCapacity.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / eventsWithCapacity.length * 100)
     : 0;
 
   const handleCreateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -210,7 +211,7 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm text-gray-500 mb-1">Capacity</label>
-                    <input name="capacity" type="number" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="100" />
+                    <input name="capacity" type="number" min={0} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="Leave blank for unlimited" />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-500 mb-1">Length</label>
@@ -434,8 +435,12 @@ export default function DashboardPage() {
                         }`}>
                           {event.status}
                         </span>
-                        <span className="text-gray-500">
-                          {event.attendees} / {event.capacity} registered
+                        <span className={`${event.capacity > 0 && event.attendees >= event.capacity ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
+                          {event.capacity > 0 && event.attendees >= event.capacity
+                            ? 'Event is full'
+                            : event.capacity > 0
+                              ? `${event.attendees} / ${event.capacity} registered`
+                              : `${event.attendees} attending (unlimited)`}
                         </span>
                       </div>
                     </div>
@@ -450,7 +455,7 @@ export default function DashboardPage() {
                   <div className="mt-4 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-orange-500 to-orange-600" 
-                      style={{ width: `${(event.attendees / event.capacity) * 100}%` }}
+                      style={{ width: `${event.capacity > 0 ? Math.min((event.attendees / event.capacity) * 100, 100) : 0}%` }}
                     />
                   </div>
                 </div>

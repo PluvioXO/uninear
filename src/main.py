@@ -129,6 +129,7 @@ class UniNearBackend:
         self.app.delete("/events/{event_id}/rsvp", dependencies=auth)(self.cancel_rsvp)
         self.app.get("/api/rsvp", dependencies=auth)(self.get_rsvps)
         self.app.get("/api/events/{event_id}/rsvps", dependencies=auth)(self.get_event_rsvps)
+        self.app.get("/api/organizer/events", dependencies=auth)(self.get_organizer_events)
 
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
@@ -259,7 +260,7 @@ class UniNearBackend:
             current_count = int(event_data.get("attendee_count") or 0)
             capacity = int(event_data.get("capacity") or 0)
 
-            if current_count >= capacity:
+            if capacity > 0 and current_count >= capacity:
                 raise HTTPException(status_code=400, detail="Event is full")
 
             payload: Dict[str, Any] = {"event_id": event_id, "user_id": attendance.user_id}
@@ -383,6 +384,20 @@ class UniNearBackend:
                 })
 
             return results
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def get_organizer_events(self, user: Dict[str, Any] = Depends(verify_token)) -> list[Dict[str, Any]]:
+        """GET /api/organizer/events — Return all events owned by the authenticated organiser (Draft + Published)."""
+        try:
+            db = self.db.admin or self.db.client
+            response = (
+                db.table("events")
+                .select("*")
+                .eq("organiser_id", user["user_id"])
+                .execute()
+            )
+            return cast(list[Dict[str, Any]], response.data or [])
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
