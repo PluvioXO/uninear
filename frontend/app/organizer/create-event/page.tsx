@@ -20,6 +20,7 @@ export default function CreateEventPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +45,8 @@ export default function CreateEventPage() {
         return;
       }
 
-      router.push('/organizer');
+      setSuccess(true);
+      setTimeout(() => router.push('/organizer'), 1500);
     } catch {
       setError('Network error. Please check your connection.');
     } finally {
@@ -185,8 +187,43 @@ export default function CreateEventPage() {
             />
           </div>
 
+          {isSubmitting && (
+            <div className="fixed inset-0 flex items-center justify-center z-50">
+              <div className="absolute inset-0 bg-black/20" />
+              <div className="relative bg-white border border-gray-200 rounded-xl shadow-xl px-8 py-6 flex flex-col items-center gap-3">
+                <svg className="w-8 h-8 text-orange-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                <p className="text-gray-700 font-medium">Creating your event...</p>
+              </div>
+            </div>
+          )}
+
           {error && (
-            <p className="text-red-600 text-sm">{error}</p>
+            <div className="fixed inset-0 flex items-center justify-center z-50" onClick={() => setError(null)}>
+              <div className="absolute inset-0 bg-black/20" />
+              <div className="relative bg-white border border-gray-200 rounded-xl shadow-xl px-8 py-6 text-center max-w-sm mx-4">
+                <p className="text-gray-900 font-semibold text-lg">That didn&apos;t work, try again</p>
+                <p className="text-gray-500 text-sm mt-1">{error}</p>
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="mt-4 text-sm text-orange-600 hover:text-orange-700 font-medium"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {success && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm font-medium rounded-lg px-4 py-3">
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Event created successfully! Redirecting...
+            </div>
           )}
 
           <div className="pt-4">
