@@ -419,7 +419,7 @@ export default function DashboardPage() {
                 <p className="text-gray-500">{activeSearch ? 'No events match your search' : 'No upcoming events'}</p>
               </div>
             ) : <div className="space-y-4">{events.map((event) => (
-                <div key={event.id} className="group border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md hover:border-orange-200 transition-all cursor-pointer">
+                <Link key={event.id} href={`/events/${event.id}`} className="block group border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md hover:border-orange-200 transition-all cursor-pointer">
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="text-lg font-bold mb-1 text-gray-900 group-hover:text-orange-600 transition-colors">{event.title}</h3>
@@ -458,7 +458,7 @@ export default function DashboardPage() {
                       style={{ width: `${event.capacity > 0 ? Math.min((event.attendees / event.capacity) * 100, 100) : 0}%` }}
                     />
                   </div>
-                </div>
+                </Link>
               ))}</div>}
           </div>
 
