@@ -3,13 +3,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { fetchEvents, rsvpToEvent, getUserRsvps, type EventResponse } from '@/lib/api';
+import { fetchEvents, rsvpToEvent, cancelRsvp, getUserRsvps, type EventResponse } from '@/lib/api';
 import { getSupabase } from '@/lib/supabase';
 
 export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const eventId = Number(params.id);
+  const rawId = params.id;
+  const eventId = Number(rawId);
 
   const [event, setEvent] = useState<EventResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +32,13 @@ export default function EventDetailPage() {
   }, []);
 
   // Fetch event details
+  // TODO: Replace with dedicated GET /events/{id} endpoint to avoid fetching all events
   useEffect(() => {
+    if (isNaN(eventId)) {
+      setError('Invalid event ID');
+      setLoading(false);
+      return;
+    }
     async function loadEvent() {
       try {
         const events = await fetchEvents();
@@ -52,7 +59,7 @@ export default function EventDetailPage() {
 
   // Check RSVP status
   const checkRsvpStatus = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || isNaN(eventId)) return;
     try {
       const res = await getUserRsvps(userId);
       if (res.ok) {
@@ -79,10 +86,36 @@ export default function EventDetailPage() {
     setRsvpError(null);
     setRsvpMessage(null);
 
-    // Optimistic update
+    if (hasRsvpd) {
+      // Cancel RSVP
+      const prevEvent = event;
+      if (event) {
+        setHasRsvpd(false);
+        setEvent({ ...event, attendee_count: Math.max(0, event.attendee_count - 1) });
+      }
+      try {
+        const res = await cancelRsvp(eventId, userId);
+        if (!res.ok && res.status !== 204) {
+          setHasRsvpd(true);
+          setEvent(prevEvent);
+          setRsvpError('Unable to cancel RSVP. Please try again.');
+          return;
+        }
+        setRsvpMessage('RSVP cancelled');
+      } catch {
+        setHasRsvpd(true);
+        setEvent(prevEvent);
+        setRsvpError('Unable to cancel RSVP. Please try again.');
+      } finally {
+        setRsvpLoading(false);
+      }
+      return;
+    }
+
+    // Create RSVP — optimistic update
     const prevHasRsvpd = hasRsvpd;
     const prevEvent = event;
-    if (!hasRsvpd && event) {
+    if (event) {
       setHasRsvpd(true);
       setEvent({ ...event, attendee_count: event.attendee_count + 1 });
     }
@@ -90,7 +123,6 @@ export default function EventDetailPage() {
     try {
       const res = await rsvpToEvent(eventId, userId);
       if (!res.ok) {
-        // Revert optimistic update
         setHasRsvpd(prevHasRsvpd);
         setEvent(prevEvent);
         setRsvpError('Unable to RSVP. Please try again.');
@@ -99,7 +131,6 @@ export default function EventDetailPage() {
       setRsvpMessage("You're going!");
       setHasRsvpd(true);
     } catch {
-      // Revert optimistic update
       setHasRsvpd(prevHasRsvpd);
       setEvent(prevEvent);
       setRsvpError('Unable to RSVP. Please try again.');
@@ -128,6 +159,7 @@ export default function EventDetailPage() {
   }
 
   const eventDate = new Date(event.start_time);
+  const isFull = event.capacity > 0 && event.attendee_count >= event.capacity;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-8 pt-24">
@@ -173,22 +205,32 @@ export default function EventDetailPage() {
               </p>
             )}
 
-            <button
-              onClick={handleRsvp}
-              disabled={rsvpLoading || hasRsvpd}
-              data-testid="rsvp-button"
-              className={`w-full py-3 rounded-lg font-bold text-white transition-colors disabled:opacity-50 ${
-                hasRsvpd
-                  ? 'bg-gray-400 cursor-default'
-                  : 'bg-orange-600 hover:bg-orange-700'
-              }`}
-            >
-              {rsvpLoading
-                ? 'Processing...'
-                : hasRsvpd
-                  ? 'Cancel RSVP'
-                  : 'RSVP'}
-            </button>
+            {isFull && !hasRsvpd ? (
+              <button
+                disabled
+                data-testid="rsvp-button"
+                className="w-full py-3 rounded-lg font-bold text-white bg-gray-400 cursor-not-allowed opacity-50"
+              >
+                Event Full
+              </button>
+            ) : (
+              <button
+                onClick={handleRsvp}
+                disabled={rsvpLoading}
+                data-testid="rsvp-button"
+                className={`w-full py-3 rounded-lg font-bold text-white transition-colors disabled:opacity-50 ${
+                  hasRsvpd
+                    ? 'bg-red-500 hover:bg-red-600'
+                    : 'bg-orange-600 hover:bg-orange-700'
+                }`}
+              >
+                {rsvpLoading
+                  ? 'Processing...'
+                  : hasRsvpd
+                    ? 'Cancel RSVP'
+                    : 'RSVP'}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { rsvpToEvent, getUserRsvps } from '../../lib/api';
+import { rsvpToEvent, getUserRsvps, cancelRsvp } from '../../lib/api';
 
 // Mock auth.ts getToken
 jest.mock('../../lib/auth', () => ({
@@ -107,5 +107,59 @@ describe('test_FR16_rsvp_ui — RSVP button and event details', () => {
 
     expect(hasRsvpdToEvent7).toBe(true);
     expect(hasRsvpdToEvent99).toBe(false);
+  });
+
+  it('cancelRsvp calls DELETE /events/{id}/rsvp with event_id and user_id', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+      json: async () => ({}),
+    });
+
+    const res = await cancelRsvp(42, 'user-abc-123');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/events/42/rsvp'),
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-jwt-token',
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({ event_id: 42, user_id: 'user-abc-123' }),
+      }),
+    );
+    expect(res.ok).toBe(true);
+  });
+
+  it('cancel RSVP failure returns non-ok response', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ detail: 'RSVP not found' }),
+    });
+
+    const res = await cancelRsvp(99, 'user-xyz');
+    expect(res.ok).toBe(false);
+    const body = await res.json();
+    expect(body.detail).toBe('RSVP not found');
+  });
+
+  it('RSVP button state logic: not RSVP\'d shows RSVP, RSVP\'d shows Cancel', () => {
+    // Simulate the button state logic from EventDetailPage
+    const getButtonText = (loading: boolean, hasRsvpd: boolean, isFull: boolean) => {
+      if (isFull && !hasRsvpd) return 'Event Full';
+      if (loading) return 'Processing...';
+      if (hasRsvpd) return 'Cancel RSVP';
+      return 'RSVP';
+    };
+
+    expect(getButtonText(false, false, false)).toBe('RSVP');
+    expect(getButtonText(false, true, false)).toBe('Cancel RSVP');
+    expect(getButtonText(true, false, false)).toBe('Processing...');
+    expect(getButtonText(true, true, false)).toBe('Processing...');
+    expect(getButtonText(false, false, true)).toBe('Event Full');
+    // Already RSVP'd user can still cancel even if event is now full
+    expect(getButtonText(false, true, true)).toBe('Cancel RSVP');
   });
 });
