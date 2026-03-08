@@ -12,6 +12,7 @@ export default function CreateEventPage() {
     date: '',
     time: '',
     location: '',
+    organizer: '',
     capacity: '',
     description: '',
     moods: '',
@@ -32,6 +33,7 @@ export default function CreateEventPage() {
         title: formData.title,
         date: new Date(dateTime).toISOString(),
         location: formData.location,
+        organizer: formData.organizer,
         capacity: Number(formData.capacity) || 0,
         description: formData.description || undefined,
         mood_tags: formData.moods ? formData.moods.split(',').map(s => s.trim()) : [],
@@ -104,17 +106,31 @@ export default function CreateEventPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-500 mb-2">Location</label>
-            <input
-              type="text"
-              name="location"
-              value={formData.location}
-              onChange={handleChange}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
-              placeholder="e.g. Engineering Hub, Room 301"
-              required
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-2">Location</label>
+              <input
+                type="text"
+                name="location"
+                value={formData.location}
+                onChange={handleChange}
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
+                placeholder="e.g. Engineering Hub, Room 301"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-2">Society Name</label>
+              <input
+                type="text"
+                name="organizer"
+                value={formData.organizer}
+                onChange={handleChange}
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
+                placeholder="e.g. Tech Society"
+                required
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -186,7 +202,29 @@ export default function CreateEventPage() {
           </div>
 
           {error && (
-            <p className="text-red-600 text-sm">{error}</p>
+            <div className="fixed inset-0 flex items-center justify-center z-50">
+              <div className="absolute inset-0 bg-black/20" />
+              <div className="relative bg-white border border-gray-200 rounded-xl shadow-xl px-8 py-6 text-center max-w-sm mx-4">
+                <p className="text-gray-900 font-semibold text-lg">That didn&apos;t work, try again</p>
+                <p className="text-gray-500 text-sm mt-1">{error}</p>
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="mt-4 text-sm text-orange-600 hover:text-orange-700 font-medium"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!error && isSubmitting && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm font-medium rounded-lg px-4 py-3">
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Event created successfully! Redirecting...
+            </div>
           )}
 
           <div className="pt-4">

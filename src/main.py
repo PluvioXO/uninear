@@ -212,7 +212,8 @@ class UniNearBackend:
 
     def delete_event(self, event_id: str):
         try:
-            self.db.client.table("events").delete().eq("id", event_id).execute()
+            db = self.db.admin or self.db.client
+            db.table("events").delete().eq("id", event_id).execute()
             return {"message": "Event deleted successfully"}
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))

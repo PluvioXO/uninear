@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { fetchOrganizerEvents, updateEvent, fetchEventRsvps } from '@/lib/api';
+import { fetchOrganizerEvents, updateEvent, deleteEvent, fetchEventRsvps } from '@/lib/api';
 import RSVPList, { type RSVPAttendee } from '@/components/RSVPList';
 
 interface OrganizerEvent {
@@ -21,6 +21,8 @@ export default function OrganizerDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [confirmPublishId, setConfirmPublishId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [rsvpEventId, setRsvpEventId] = useState<number | null>(null);
   const [rsvpAttendees, setRsvpAttendees] = useState<RSVPAttendee[]>([]);
   const [rsvpLoading, setRsvpLoading] = useState(false);
@@ -56,14 +58,30 @@ export default function OrganizerDashboard() {
         setError(body?.detail ?? 'Failed to publish event');
         return;
       }
-      setEvents(prev =>
-        prev.map(e => e.id === eventId ? { ...e, status: 'Published' } : e)
-      );
+      loadEvents();
     } catch {
       setError('Network error. Please try again.');
     } finally {
       setPublishingId(null);
       setConfirmPublishId(null);
+    }
+  }
+
+  async function handleDelete(eventId: number) {
+    setDeletingId(eventId);
+    try {
+      const res = await deleteEvent(eventId);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.detail ?? 'Failed to delete event');
+        return;
+      }
+      loadEvents();
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   }
 
@@ -190,6 +208,32 @@ export default function OrganizerDashboard() {
                         </button>
                       )
                     )}
+                    {confirmDeleteId === event.id ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Delete this event?</span>
+                        <button
+                          onClick={() => handleDelete(event.id)}
+                          disabled={deletingId === event.id}
+                          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                          {deletingId === event.id ? 'Deleting...' : 'Confirm'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="text-gray-500 hover:text-gray-700 text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteId(event.id)}
+                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          Delete
+                        </button>
+                      )
+                    }
                   </div>
                 </div>
                 {rsvpEventId === event.id && (

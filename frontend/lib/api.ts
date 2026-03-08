@@ -106,6 +106,10 @@ export async function fetchEventRsvps(eventId: number): Promise<Response> {
   return apiFetch(`/api/events/${eventId}/rsvps`);
 }
 
+export async function deleteEvent(eventId: number): Promise<Response> {
+  return apiFetch(`/events/${eventId}`, {method: 'DELETE'});
+}
+
 export async function createEvent(data: {
   title: string;
   date: string;
