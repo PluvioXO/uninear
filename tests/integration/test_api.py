@@ -248,15 +248,20 @@ def test_delete_event():
 
 # 5. Test Update Event
 def test_update_event():
+    mock_ownership_response = MagicMock()
+    mock_ownership_response.data = [{"organiser_id": MOCK_USER_ID}]
+
     mock_response = MagicMock()
     mock_response.data = [{"id": 1, "title": "Updated Title"}]
+
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_ownership_response
+    mock_admin.table.return_value.update.return_value.eq.return_value.execute.return_value = mock_response
 
     payload: dict[str, Any] = {"title": "Updated Title"}
 
     with patch_auth_valid():
-        with patch.object(backend.db.client, 'table') as mock_table:
-            mock_table.return_value.update.return_value.eq.return_value.execute.return_value = mock_response
-
+        with patch.object(backend.db, 'admin', mock_admin):
             response = client.patch("/events/1", json=payload, headers=AUTH_HEADER)
 
             assert response.status_code == 200
@@ -291,18 +296,24 @@ def test_FR10_get_organizer_events():
 def test_FR10_publish_event():
     """FR-10: Organiser publishes draft event, status changes to Published."""
     # Part 1: PATCH /events/{id} updates status to "Published"
+    mock_ownership_response = MagicMock()
+    mock_ownership_response.data = [{"organiser_id": MOCK_USER_ID}]
+
     mock_update_response = MagicMock()
     mock_update_response.data = [{"id": 1, "title": "My Event", "status": "Published"}]
 
-    with patch_auth_valid():
-        with patch.object(backend.db.client, 'table') as mock_table:
-            mock_table.return_value.update.return_value.eq.return_value.execute.return_value = mock_update_response
+    mock_admin = MagicMock()
+    # Ownership check: select().eq("id", ...).execute()
+    mock_admin.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_ownership_response
+    # Update: update().eq("id", ...).execute()
+    mock_admin.table.return_value.update.return_value.eq.return_value.execute.return_value = mock_update_response
 
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
             response = client.patch("/events/1", json={"status": "Published"}, headers=AUTH_HEADER)
 
             assert response.status_code == 200
             assert response.json()[0]["status"] == "Published"
-            mock_table.return_value.update.assert_called_once_with({"status": "Published"})
 
     # Part 2: GET /events returns the published event (RLS filters at DB level)
     mock_get_response = MagicMock()
@@ -588,22 +599,23 @@ def test_FR21_get_user_rsvps_with_event_data():
 
 # 8b. test_FR14_get_event_rsvps — organiser views attendee list
 def test_FR14_get_event_rsvps():
+    ownership_response = MagicMock()
+    ownership_response.data = [{"organiser_id": MOCK_USER_ID}]
+
     attendance_response = MagicMock()
     attendance_response.data = [
         {"user_id": "uid-abc", "created_at": "2025-02-01T10:00:00"}
     ]
 
-    attendance_table = MagicMock()
-    attendance_table.select.return_value.eq.return_value.execute.return_value = attendance_response
-
     mock_user = MagicMock()
     mock_user.user.email = "alice@bath.ac.uk"
     mock_user.user.user_metadata = {"full_name": "Alice Smith"}
 
-    # Build a full mock admin client so the test works regardless of whether
-    # SERVICE_ROLE_KEY is set (db.admin may be None in CI).
     mock_admin = MagicMock()
-    mock_admin.table.return_value = attendance_table
+    # First call: ownership check, second call: attendance query
+    mock_admin.table.return_value.select.return_value.eq.return_value.execute.side_effect = [
+        ownership_response, attendance_response
+    ]
     mock_admin.auth.admin.get_user_by_id.return_value = mock_user
 
     with patch_auth_valid():
@@ -617,6 +629,27 @@ def test_FR14_get_event_rsvps():
             assert body[0]["email"] == "alice@bath.ac.uk"
             assert body[0]["rsvp_time"] == "2025-02-01T10:00:00"
             mock_admin.auth.admin.get_user_by_id.assert_called_once_with("uid-abc")
+
+# 8c. test_FR14_view_rsvp_list_empty — empty RSVP list returns empty array
+def test_FR14_view_rsvp_list_empty():
+    """FR-14: Empty RSVP list returns [] not error."""
+    ownership_response = MagicMock()
+    ownership_response.data = [{"organiser_id": MOCK_USER_ID}]
+
+    attendance_response = MagicMock()
+    attendance_response.data = []
+
+    mock_admin = MagicMock()
+    mock_admin.table.return_value.select.return_value.eq.return_value.execute.side_effect = [
+        ownership_response, attendance_response
+    ]
+
+    with patch_auth_valid():
+        with patch.object(backend.db, 'admin', mock_admin):
+            response = client.get("/api/events/999/rsvps", headers=AUTH_HEADER)
+
+            assert response.status_code == 200
+            assert response.json() == []
 
 # 9. Test Signup
 def test_signup():

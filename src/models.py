@@ -30,6 +30,13 @@ class EventUpdateSchema(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value not in ("Draft", "Published"):
+            raise ValueError("Status must be 'Draft' or 'Published'")
+        return value
+
 class UserSignupSchema(BaseModel):
     email: str
     password: str

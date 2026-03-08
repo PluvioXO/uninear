@@ -217,14 +217,27 @@ class UniNearBackend:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    def update_event(self, event_id: str, event: EventUpdateSchema):
+    def update_event(self, event_id: str, event: EventUpdateSchema, user: Dict[str, Any] = Depends(verify_token)):
         try:
+            db = self.db.admin or self.db.client
+
+            # Verify the authenticated user owns this event
+            existing = db.table("events").select("organiser_id").eq("id", event_id).execute()
+            if not existing.data:
+                raise HTTPException(status_code=404, detail="Event not found")
+            if existing.data[0].get("organiser_id") != user["user_id"]:
+                raise HTTPException(status_code=403, detail="You can only update your own events")
+
             event_data = event.model_dump(exclude_unset=True)
             if 'date' in event_data and event_data['date']:
                  event_data['start_time'] = event_data.pop('date').isoformat()
 
-            response = self.db.client.table("events").update(event_data).eq("id", event_id).execute()
+            response = db.table("events").update(event_data).eq("id", event_id).execute()
+            if not response.data:
+                raise HTTPException(status_code=404, detail="Event not found")
             return response.data
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -349,11 +362,18 @@ class UniNearBackend:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    def get_event_rsvps(self, event_id: int) -> list[Dict[str, Any]]:
+    def get_event_rsvps(self, event_id: int, user: Dict[str, Any] = Depends(verify_token)) -> list[Dict[str, Any]]:
         """GET /api/events/{event_id}/rsvps — Return RSVPs for an organiser's event."""
         try:
             # Use admin client to bypass RLS (organiser-level query)
             db = self.db.admin or self.db.client
+
+            # Verify the authenticated user owns this event
+            event_check = db.table("events").select("organiser_id").eq("id", event_id).execute()
+            if not event_check.data:
+                raise HTTPException(status_code=404, detail="Event not found")
+            if event_check.data[0].get("organiser_id") != user["user_id"]:
+                raise HTTPException(status_code=403, detail="You can only view RSVPs for your own events")
             attendance_response = (
                 db
                 .table("event_attendance")
@@ -384,6 +404,8 @@ class UniNearBackend:
                 })
 
             return results
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -393,7 +415,7 @@ class UniNearBackend:
             db = self.db.admin or self.db.client
             response = (
                 db.table("events")
-                .select("*")
+                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, latitude, longitude")
                 .eq("organiser_id", user["user_id"])
                 .execute()
             )
