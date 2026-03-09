@@ -32,7 +32,7 @@ describe('test_NFR08_user_login - Login Flow', () => {
     jest.clearAllMocks()
   })
 
-  it('AC1: successful login redirects to /dashboard', async () => {
+  it('AC1: successful login redirects to /dashboard/discovery', async () => {
     mockedLogin.mockResolvedValue({ data: { session: { access_token: 'fake-jwt' } }, error: null } as unknown as AuthTokenResponsePassword)
 
     render(<LoginPage />)
@@ -43,7 +43,7 @@ describe('test_NFR08_user_login - Login Flow', () => {
 
     await waitFor(() => {
       expect(mockedLogin).toHaveBeenCalledWith('test@bath.ac.uk', 'strongpassword')
-      expect(mockPush).toHaveBeenCalledWith('/dashboard')
+      expect(mockPush).toHaveBeenCalledWith('/dashboard/discovery')
     })
   })
 

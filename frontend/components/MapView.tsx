@@ -88,7 +88,7 @@ export default function MapView({ events }: MapViewProps) {
           <span style="color:#666;font-size:12px">${escapeHtml(formattedTime)}</span><br/>
           <span style="color:#666;font-size:12px">${event.attendees} attendees</span><br/>
           <a
-            href="/dashboard/events/${event.id}"
+            href="/dashboard/discovery/${event.id}"
             style="display:inline-block;margin-top:6px;padding:4px 12px;background:#ea580c;color:white;text-decoration:none;border-radius:6px;font-size:12px"
           >
             View Details

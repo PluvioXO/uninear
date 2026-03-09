@@ -117,19 +117,19 @@ class UniNearBackend:
         self.app.post("/auth/signup")(self.signup)
         self.app.post("/auth/login")(self.login)
         self.app.post("/auth/forgot-password")(self.forgot_password)
-        self.app.delete("/auth/account", dependencies=[Depends(verify_token)])(self.delete_account)
         self.app.get("/events", response_model=list[EventResponseSchema])(self.get_events)
 
         # Protected endpoints (require valid JWT)
         auth = [Depends(verify_token)]
+        self.app.delete("/auth/account", dependencies=auth)(self.delete_account)
         self.app.post("/events", dependencies=auth)(self.create_event)
         self.app.delete("/events/{event_id}", dependencies=auth)(self.delete_event)
         self.app.patch("/events/{event_id}", dependencies=auth)(self.update_event)
+        self.app.get("/api/organizer/events", dependencies=auth)(self.get_organizer_events)
         self.app.post("/api/rsvp", status_code=201, dependencies=auth)(self.create_rsvp)
         self.app.delete("/events/{event_id}/rsvp", dependencies=auth)(self.cancel_rsvp)
         self.app.get("/api/rsvp", dependencies=auth)(self.get_rsvps)
         self.app.get("/api/events/{event_id}/rsvps", dependencies=auth)(self.get_event_rsvps)
-        self.app.get("/api/organizer/events", dependencies=auth)(self.get_organizer_events)
 
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
@@ -492,6 +492,7 @@ class UniNearBackend:
             raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
+        
 
 # Create the app instance for uvicorn to pick up
 backend = UniNearBackend()

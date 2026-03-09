@@ -1,23 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/useRequireAuth';
-import { getSupabase } from '@/lib/supabase';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function OrganizerLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useRequireAuth();
-  const [fullName, setName] = useState<string | null>(null);
-
-  // Get current user's full name
-  useEffect(() => {
-    getSupabase().auth.getSession().then(({ data }) => {
-      if (data.session?.user) {
-        setName(data.session.user.user_metadata['full_name']);
-      }
-    });
-  }, []);
 
   if (loading) {
     return (
@@ -35,23 +23,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-8">
             <Link href="/" className="text-2xl font-bold tracking-tighter text-orange-600">UNINEAR</Link>
             <div className="hidden md:flex space-x-6 text-sm font-medium">
-              <Link href="/dashboard/discovery" className="text-gray-500 hover:text-gray-900 transition-colors">Discovery</Link>
-              <Link href="/dashboard/rsvps" className="text-gray-500 hover:text-gray-900 transition-colors">My RSVPs</Link>
-              <Link href="/dashboard/settings" className="text-gray-500 hover:text-gray-900 transition-colors">Settings</Link>
+              <Link href="/organizer/events" className="text-gray-500 hover:text-gray-900 transition-colors">Events</Link>
+              <Link href="/organizer/members" className="text-gray-500 hover:text-gray-900 transition-colors">Members</Link>
+              <Link href="/organizer/analytics" className="text-gray-500 hover:text-gray-900 transition-colors">Analytics</Link>
+              <Link href="/organizer/settings" className="text-gray-500 hover:text-gray-900 transition-colors">Settings</Link>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <MagneticButton
-              label="Switch to Organiser View"
-              href="/organizer/events"
+              label="Switch to Attendee View"
+              href="/dashboard/discovery"
               className="bg-white text-black px-6"
               accentClassName="from-orange-400 via-amber-400 to-yellow-400"
               type="button"
             />
             <div className="hidden md:block text-right">
-              <p className="text-sm font-medium text-gray-900">{fullName}</p>
+              <p className="text-sm font-medium text-gray-900">PLACEHOLDER SOCIETY</p>
+              <p className="text-xs text-gray-500">PLACEHOLDER ROLE</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 border border-gray-200" />
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 border border-gray-200" />
           </div>
         </div>
       </nav>

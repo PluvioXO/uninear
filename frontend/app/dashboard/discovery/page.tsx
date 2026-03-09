@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import MagneticButton from '@/components/MagneticButton';
 import { fetchEvents, type EventResponse } from '@/lib/api';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
@@ -54,19 +53,16 @@ function toEvent(e: EventResponse): Event {
 const CAMPUS_LAT = 51.3758;
 const CAMPUS_LNG = -2.3599;
 
-export default function DashboardPage() {
+export default function DiscoveryPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [radiusFilter, setRadiusFilter] = useState<number | null>(null);
   const [timeFilter, setTimeFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
 
   const loadEvents = useCallback(async (radius?: number | null, time?: string | null, search?: string) => {
     setLoading(true);
@@ -119,154 +115,19 @@ export default function DashboardPage() {
     ? Math.round(eventsWithCapacity.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / eventsWithCapacity.length * 100)
     : 0;
 
-  const handleCreateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsCreating(true);
-    setCreateError(null);
-
-    try {
-      const formData = new FormData(e.currentTarget);
-      const eventData = {
-        title: formData.get('title') as string,
-        date: formData.get('date') as string,
-        location: formData.get('location') as string,
-        capacity: Number(formData.get('capacity')),
-        moods: (formData.get('moods') as string).split(',').map(s => s.trim()),
-        energy: formData.get('energy') as 'Low' | 'Medium' | 'High',
-        length: formData.get('length') as string
-      };
-
-      // TODO: Replace with actual API call
-      // await createEvent(eventData);
-
-      // For now, just add to local state
-      const newEvent: Event = {
-        id: Date.now(),
-        ...eventData,
-        attendees: 0,
-        status: 'Draft'
-      };
-
-      setEvents([...events, newEvent]);
-      setIsCreateModalOpen(false);
-    } catch (error) {
-      setCreateError('Failed to create event. Please try again.');
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden">
-      {/* Dashboard Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/50 backdrop-blur-md border-b border-gray-200">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="text-2xl font-bold tracking-tighter text-orange-600">UNINEAR</Link>
-            <div className="hidden md:flex space-x-6 text-sm font-medium">
-              <Link href="/dashboard" className="text-gray-900">Overview</Link>
-              <Link href="/dashboard/events" className="text-gray-500 hover:text-gray-900 transition-colors">Events</Link>
-              <Link href="/dashboard/members" className="text-gray-500 hover:text-gray-900 transition-colors">Members</Link>
-              <Link href="/dashboard/analytics" className="text-gray-500 hover:text-gray-900 transition-colors">Analytics</Link>
-              <Link href="/dashboard/settings" className="text-gray-500 hover:text-gray-900 transition-colors">Settings</Link>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="hidden md:block text-right">
-              <p className="text-sm font-medium text-gray-900">Tech Society</p>
-              <p className="text-xs text-gray-500">President</p>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 border border-gray-200" />
-          </div>
-        </div>
-      </nav>
-
       <main className="relative z-10 container mx-auto px-6 pt-28 pb-12">
-        {/* Create Event Modal */}
-        {isCreateModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white border border-gray-200 rounded-3xl p-8 w-full max-w-lg relative shadow-xl">
-              <button 
-                onClick={() => setIsCreateModalOpen(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-900"
-              >
-                ✕
-              </button>
-              <h2 className="text-2xl font-bold mb-6 text-gray-900">Create New Event</h2>
-              <form onSubmit={handleCreateEvent} className="space-y-4">
-                <div>
-                  <label className="block text-sm text-gray-500 mb-1">Event Title</label>
-                  <input name="title" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Annual Hackathon" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">Date & Time</label>
-                    <input name="date" type="datetime-local" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">Location</label>
-                    <input name="location" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Main Hall" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">Capacity</label>
-                    <input name="capacity" type="number" min={0} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="Leave blank for unlimited" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">Length</label>
-                    <input name="length" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. 2 hours" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">Energy Level</label>
-                    <select name="energy" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900">
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">Mood Tags</label>
-                    <input name="moods" required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-500 text-gray-900" placeholder="e.g. Social, Fun" />
-                  </div>
-                </div>
-                {createError && (
-                  <p className="text-red-600 text-sm">{createError}</p>
-                )}
-                <div className="pt-4">
-                  <MagneticButton
-                    label={isCreating ? 'Creating...' : 'Create Event'}
-                    className="w-full bg-gray-900 text-white justify-center disabled:opacity-50"
-                    accentClassName="from-orange-400 via-amber-400 to-yellow-400"
-                    type="submit"
-                    disabled={isCreating}
-                  />
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold mb-2">Dashboard</h1>
-            <p className="text-gray-400">Welcome back, here&apos;s what&apos;s happening with your society.</p>
-          </div>
-          <div onClick={() => setIsCreateModalOpen(true)} data-testid="create-event-trigger">
-            <MagneticButton
-              label="Create Event"
-              className="bg-white text-black px-6"
-              accentClassName="from-orange-400 via-amber-400 to-yellow-400"
-              type="button"
-            />
+            <h1 className="text-3xl md:text-4xl font-bold mb-2">Discovery</h1>
+            <p className="text-gray-400">Find the perfect event for you.</p>
           </div>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           {[
             { label: 'Total Members', value: totalMembers.toLocaleString(), change: '+12% this month', accent: 'bg-orange-100 text-orange-600' },
             { label: 'Active Events', value: activeEventsCount.toString(), change: 'Currently live', accent: 'bg-blue-100 text-blue-600' },
@@ -282,7 +143,7 @@ export default function DashboardPage() {
               <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
             </div>
           ))}
-        </div>
+        </div> */}
 
         {/* Main Content Grid */}
         <div className="grid lg:grid-cols-3 gap-8">
@@ -419,7 +280,7 @@ export default function DashboardPage() {
                 <p className="text-gray-500">{activeSearch ? 'No events match your search' : 'No upcoming events'}</p>
               </div>
             ) : <div className="space-y-4">{events.map((event) => (
-                <div key={event.id} className="group border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md hover:border-orange-200 transition-all cursor-pointer">
+                <Link key={event.id} href={`/dashboard/discovery/${event.id}`} className="block group border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md hover:border-orange-200 transition-all cursor-pointer">
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="text-lg font-bold mb-1 text-gray-900 group-hover:text-orange-600 transition-colors">{event.title}</h3>
@@ -444,10 +305,13 @@ export default function DashboardPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-200 group-hover:bg-orange-50 group-hover:border-orange-100 transition-all">
-                      <svg className="w-5 h-5 text-gray-400 group-hover:text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-200 group-hover:bg-orange-50 group-hover:border-orange-100 transition-all">
+                        <svg className="w-5 h-5 text-gray-400 group-hover:text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                      <span className="text-xs text-gray-400 group-hover:text-orange-600 transition-colors">View Details</span>
                     </div>
                   </div>
                   
@@ -458,52 +322,30 @@ export default function DashboardPage() {
                       style={{ width: `${event.capacity > 0 ? Math.min((event.attendees / event.capacity) * 100, 100) : 0}%` }}
                     />
                   </div>
-                </div>
+                </Link>
               ))}</div>}
           </div>
 
           {/* Quick Actions & Notifications */}
           <div className="space-y-8">
-            <div>
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900">
-                <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                Quick Actions
-              </h2>
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { label: 'New Post', icon: '📝' },
-                  { label: 'Add Member', icon: '👤' },
-                  { label: 'Scan Ticket', icon: '📱' },
-                  { label: 'Export Data', icon: '📊' }
-                ].map((action, i) => (
-                  <button key={i} className="p-4 rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-orange-200 transition-all text-left group">
-                    <span className="text-2xl mb-2 block group-hover:scale-110 transition-transform">{action.icon}</span>
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-orange-700">{action.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900">
-                <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
-                Recent Activity
-              </h2>
-              <div className="border border-gray-200 rounded-2xl bg-white shadow-sm p-1">
-                {[
-                  { user: 'Sarah M.', action: 'registered for', target: 'Tech Hackathon', time: '2m ago' },
-                  { user: 'James L.', action: 'joined the society', target: '', time: '15m ago' },
-                  { user: 'Admin', action: 'updated event details', target: 'Panel Night', time: '1h ago' },
-                  { user: 'Alex K.', action: 'commented on', target: 'Freshers Mixer', time: '3h ago' }
-                ].map((activity, i) => (
-                  <div key={i} className="p-3 hover:bg-gray-50 rounded-xl transition-colors border-b last:border-0 border-gray-100">
-                    <p className="text-sm text-gray-600">
-                      <span className="font-bold text-gray-900">{activity.user}</span> {activity.action} {activity.target && <span className="text-orange-600 font-medium">{activity.target}</span>}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
-                  </div>
-                ))}
-              </div>
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900">
+              <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
+              Recent Activity
+            </h2>
+            <div className="border border-gray-200 rounded-2xl bg-white shadow-sm p-1">
+              {[
+                { user: 'Tech Hackathon', action: 'has reached max attendance', target: '', time: '15m ago' },
+                { user: 'Tech Society', action: 'updated event', target: 'Tech Hackathon', time: '3h ago' },
+                { user: 'CS Society', action: 'published event', target: 'Campus Meetup', time: '4h ago' },
+                { user: 'Tech Society', action: 'published event', target: 'Tech Hackathon', time: '7h ago' }
+              ].map((activity, i) => (
+                <div key={i} className="p-3 hover:bg-gray-50 rounded-xl transition-colors border-b last:border-0 border-gray-100">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-bold text-gray-900">{activity.user}</span> {activity.action} {activity.target && <span className="text-orange-600 font-medium">{activity.target}</span>}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import SettingsPage from '../../app/dashboard/settings/page'
+import SettingsPage from '../../app/organizer/settings/page'
 import { logout } from '../../lib/auth'
 
 // Mock MagneticButton

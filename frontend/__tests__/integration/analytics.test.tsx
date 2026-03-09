@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import AnalyticsDashboard from '../../app/dashboard/analytics/page'
+import AnalyticsDashboard from '../../app/organizer/analytics/page'
 
 // Mock Recharts since it uses browser APIs
 jest.mock('recharts', () => ({

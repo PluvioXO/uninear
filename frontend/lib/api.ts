@@ -110,6 +110,24 @@ export async function deleteEvent(eventId: number): Promise<Response> {
   return apiFetch(`/events/${eventId}`, {method: 'DELETE'});
 }
 
+export async function rsvpToEvent(eventId: number, userId: string): Promise<Response> {
+  return apiFetch('/api/rsvp', {
+    method: 'POST',
+    body: JSON.stringify({ event_id: eventId, user_id: userId }),
+  });
+}
+
+export async function getUserRsvps(userId: string): Promise<Response> {
+  return apiFetch(`/api/rsvp?user_id=${encodeURIComponent(userId)}`);
+}
+
+export async function cancelRsvp(eventId: number, userId: string): Promise<Response> {
+  return apiFetch(`/events/${eventId}/rsvp`, {
+    method: 'DELETE',
+    body: JSON.stringify({ event_id: eventId, user_id: userId }),
+  });
+}
+
 export async function createEvent(data: {
   title: string;
   date: string;

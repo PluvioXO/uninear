@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
-import DashboardPage from '../../app/dashboard/page'
+import DiscoveryPage from '../../app/dashboard/discovery/page'
 
-// Mock the components used in DashboardPage
+// Mock the components used in DiscoveryPage
 jest.mock('../../components/MagneticButton', () => {
   return function MockMagneticButton({ label, onClick }: { label: string, onClick?: () => void }) {
     return <button onClick={onClick}>{label}</button>
@@ -53,7 +53,7 @@ beforeEach(() => {
 
 describe('Dashboard Integration', () => {
   it('opens the create event modal when clicking the create button', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     const createTrigger = screen.getByTestId('create-event-trigger')
@@ -63,7 +63,7 @@ describe('Dashboard Integration', () => {
   })
 
   it('renders navigation links', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     expect(screen.getByText('Overview')).toBeInTheDocument()
@@ -76,7 +76,7 @@ describe('Dashboard Integration', () => {
 
 describe('FR-01: Event List Display', () => {
   it('renders events from the API sorted by date', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     await waitFor(() => {
       expect(screen.getByText('Annual Tech Hackathon')).toBeInTheDocument()
@@ -95,7 +95,7 @@ describe('FR-01: Event List Display', () => {
     // Keep the promise pending
     mockFetchEvents.mockReturnValue(new Promise(() => {}))
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     expect(screen.getByTestId('loading-skeleton')).toBeInTheDocument()
   })
@@ -103,7 +103,7 @@ describe('FR-01: Event List Display', () => {
   it('shows "No upcoming events" when API returns empty array', async () => {
     mockFetchEvents.mockResolvedValue([])
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     await waitFor(() => {
       expect(screen.getByText('No upcoming events')).toBeInTheDocument()
@@ -113,7 +113,7 @@ describe('FR-01: Event List Display', () => {
   it('shows error state with retry button on API failure', async () => {
     mockFetchEvents.mockRejectedValue(new Error('Network error'))
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     await waitFor(() => {
       expect(screen.getByText('Unable to load events. Please try again.')).toBeInTheDocument()
@@ -125,7 +125,7 @@ describe('FR-01: Event List Display', () => {
     mockFetchEvents.mockRejectedValueOnce(new Error('Network error'))
     mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     await waitFor(() => {
       expect(screen.getByText('Retry')).toBeInTheDocument()
@@ -141,7 +141,7 @@ describe('FR-01: Event List Display', () => {
   })
 
   it('displays event details: title, date, location, attendee count', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     await waitFor(() => {
       expect(screen.getByText('Annual Tech Hackathon')).toBeInTheDocument()
@@ -173,7 +173,7 @@ describe('NFR-14: Event API Integration', () => {
     ]
     mockFetchEvents.mockResolvedValue(eventsWithAllFields)
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     await waitFor(() => {
       // AC-1: title rendered
@@ -191,7 +191,7 @@ describe('NFR-14: Event API Integration', () => {
   it('test_NFR14_events_api_integration: error state shows correct message and retry', async () => {
     mockFetchEvents.mockRejectedValue(new Error('Server error'))
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     await waitFor(() => {
       // AC-2: correct error message
@@ -227,7 +227,7 @@ describe('NFR-14: Event API Integration', () => {
 
 describe('FR-03: Time Filter', () => {
   it('test_FR03_time_filter: renders time filter chips with default "All" selected', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     const timeFilter = screen.getByTestId('time-filter')
@@ -243,7 +243,7 @@ describe('FR-03: Time Filter', () => {
   })
 
   it('test_FR03_time_filter: selecting "Next 2 hours" calls fetchEvents with time_filter=2hr', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     const twoHrBtn = screen.getByTestId('time-filter-2hr')
@@ -255,7 +255,7 @@ describe('FR-03: Time Filter', () => {
   })
 
   it('test_FR03_time_filter: selecting "Today" calls fetchEvents with time_filter=today', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     const todayBtn = screen.getByTestId('time-filter-today')
@@ -267,7 +267,7 @@ describe('FR-03: Time Filter', () => {
   })
 
   it('test_FR03_time_filter: selecting "This week" calls fetchEvents with time_filter=week', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     const weekBtn = screen.getByTestId('time-filter-week')
@@ -279,7 +279,7 @@ describe('FR-03: Time Filter', () => {
   })
 
   it('test_FR03_time_filter: selecting "All" clears time filter', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     // Select a filter first
@@ -298,7 +298,7 @@ describe('FR-03: Time Filter', () => {
     mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
     mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     await waitFor(() => {
       expect(screen.getByText('Annual Tech Hackathon')).toBeInTheDocument()
@@ -314,7 +314,7 @@ describe('FR-03: Time Filter', () => {
   })
 
   it('test_FR03_time_filter: time filter combines with radius filter', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     // Set time filter
@@ -336,7 +336,7 @@ describe('FR-03: Time Filter', () => {
   })
 
   it('test_FR03_time_filter: active filter chip is visually highlighted', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     // Click "Today"
@@ -358,7 +358,7 @@ describe('FR-03: Time Filter', () => {
 
 describe('FR-02: Location/Radius Filter', () => {
   it('test_FR02_location_filter: renders radius filter dropdown with options', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     const select = screen.getByTestId('radius-filter') as HTMLSelectElement
@@ -375,7 +375,7 @@ describe('FR-02: Location/Radius Filter', () => {
   })
 
   it('test_FR02_location_filter: selecting radius calls fetchEvents with params', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     const select = screen.getByTestId('radius-filter')
@@ -391,7 +391,7 @@ describe('FR-02: Location/Radius Filter', () => {
   })
 
   it('test_FR02_location_filter: clearing filter calls fetchEvents without params', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     // First select a radius
@@ -413,7 +413,7 @@ describe('FR-02: Location/Radius Filter', () => {
     // Second call returns 1 event (filtered)
     mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     // Find the Active Events stat card by its label, then check the value within it
     await waitFor(() => {
@@ -446,7 +446,7 @@ describe('FR-07: Keyword Search', () => {
 
   it('test_FR07_keyword_search: renders search input', async () => {
     jest.useRealTimers()
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     const searchInput = screen.getByTestId('search-input')
@@ -458,7 +458,7 @@ describe('FR-07: Keyword Search', () => {
     mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
     mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     const searchInput = screen.getByTestId('search-input')
@@ -476,7 +476,7 @@ describe('FR-07: Keyword Search', () => {
     mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
     mockFetchEvents.mockResolvedValueOnce([])
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     const searchInput = screen.getByTestId('search-input')
@@ -494,7 +494,7 @@ describe('FR-07: Keyword Search', () => {
     mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
     mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     const searchInput = screen.getByTestId('search-input')
@@ -518,7 +518,7 @@ describe('FR-07: Keyword Search', () => {
     mockFetchEvents.mockResolvedValueOnce(MOCK_EVENTS)
     mockFetchEvents.mockResolvedValueOnce([MOCK_EVENTS[0]])
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     const searchInput = screen.getByTestId('search-input')
@@ -533,7 +533,7 @@ describe('FR-07: Keyword Search', () => {
 
   it('test_FR07_keyword_search: search combines with other filters', async () => {
     jest.useRealTimers()
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
 
     // Set time filter

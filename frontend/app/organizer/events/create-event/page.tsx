@@ -46,7 +46,7 @@ export default function CreateEventPage() {
         return;
       }
 
-      router.push('/organizer');
+      router.push('/organizer/events');
     } catch {
       setError('Network error. Please check your connection.');
     } finally {
@@ -63,7 +63,7 @@ export default function CreateEventPage() {
     <div className="min-h-screen bg-gray-50 text-gray-900 p-8 pt-24">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
-          <Link href="/organizer" className="text-gray-500 hover:text-gray-900 mb-4 inline-block">← Back to Dashboard</Link>
+          <Link href="/organizer/events" className="text-gray-500 hover:text-gray-900 mb-4 inline-block">← Back to Dashboard</Link>
           <h1 className="text-4xl font-bold">Create New Event</h1>
         </div>
 

@@ -13,7 +13,7 @@ export default function Navbar({ title = 'UNINEAR', className = '' }: NavbarProp
   return (
     <nav className={`w-full bg-white/70 backdrop-blur-md border-b border-gray-200 ${className}`}>
       <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-        <Link href="/dashboard" className="text-2xl font-bold tracking-tighter text-orange-600">
+        <Link href="/dashboard/discovery" className="text-2xl font-bold tracking-tighter text-orange-600">
           {title}
         </Link>
         <button

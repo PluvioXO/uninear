@@ -64,7 +64,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/dashboard');
+      router.push('/dashboard/discovery');
     } catch (err) {
       if (err instanceof Error && err.message.includes('Missing NEXT_PUBLIC_SUPABASE_')) {
         setError('App configuration error: missing Supabase environment variables.');
