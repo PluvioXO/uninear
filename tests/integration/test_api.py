@@ -40,6 +40,10 @@ def test_read_root():
     assert response.status_code == 200
     assert "status" in response.json()
 
+def test_default_cors_allows_cw_pl3v():
+    with patch.dict(os.environ, {"CORS_ALLOW_ORIGINS": "", "FRONTEND_URL": ""}):
+        assert "https://cw.pl3v.com" in backend._get_allowed_origins()
+
 # 2. Test to see if we can fetch events (The Core Feature)
 def test_get_events():
     # Mock the database response
