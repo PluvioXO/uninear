@@ -89,13 +89,13 @@ describe('Event detail page', () => {
 
   it('shows the detailed fetch failure reason when loading the event fails', async () => {
     mockFetchEvents.mockRejectedValue(
-      new Error('Failed to fetch events (503 Service Unavailable): Unable to load events'),
+      new Error('Failed to fetch events from https://uninear-gvjz.vercel.app/events: Load failed (possible CORS/network issue)'),
     )
 
     render(<EventDetailPage />)
 
     expect(
-      await screen.findByText('Failed to fetch events (503 Service Unavailable): Unable to load events'),
+      await screen.findByText('Failed to fetch events from https://uninear-gvjz.vercel.app/events: Load failed (possible CORS/network issue)'),
     ).toBeInTheDocument()
   })
 })

@@ -82,7 +82,7 @@ describe('fetchEvents', () => {
     });
 
     await expect(fetchEvents()).rejects.toThrow(
-      'Failed to fetch events (503 Service Unavailable): Unable to load events',
+      'Failed to fetch events from http://127.0.0.1:8000/events (503 Service Unavailable): Unable to load events',
     );
   });
 
@@ -90,7 +90,7 @@ describe('fetchEvents', () => {
     mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
     await expect(fetchEvents()).rejects.toThrow(
-      'Failed to fetch events: Failed to fetch',
+      'Failed to fetch events from http://127.0.0.1:8000/events: Failed to fetch (possible CORS/network issue)',
     );
   });
 
@@ -103,7 +103,7 @@ describe('fetchEvents', () => {
     });
 
     await expect(fetchEvents()).rejects.toThrow(
-      'Failed to fetch events (502 Bad Gateway): upstream timeout',
+      'Failed to fetch events from http://127.0.0.1:8000/events (502 Bad Gateway): upstream timeout',
     );
   });
 });
@@ -113,5 +113,16 @@ describe('formatEventFetchErrorMessage', () => {
     expect(
       formatEventFetchErrorMessage(new Error('Failed to fetch events: Network error')),
     ).toBe('Failed to fetch events: Network error');
+  });
+
+  it('adds the request URL and network hint when provided', () => {
+    expect(
+      formatEventFetchErrorMessage(
+        new Error('Load failed'),
+        'https://api.example.com/events',
+      ),
+    ).toBe(
+      'Failed to fetch events from https://api.example.com/events: Load failed (possible CORS/network issue)',
+    );
   });
 });

@@ -61,11 +61,20 @@ function getErrorMessage(error: unknown, fallback = 'Unknown error'): string {
   return fallback;
 }
 
-export function formatEventFetchErrorMessage(error: unknown): string {
+export function formatEventFetchErrorMessage(
+  error: unknown,
+  requestUrl?: string,
+): string {
   const message = getErrorMessage(error);
-  return message.startsWith('Failed to fetch events')
-    ? message
-    : `Failed to fetch events: ${message}`;
+  if (message.startsWith('Failed to fetch events')) {
+    return message;
+  }
+
+  if (requestUrl) {
+    return `Failed to fetch events from ${requestUrl}: ${message} (possible CORS/network issue)`;
+  }
+
+  return `Failed to fetch events: ${message}`;
 }
 
 /**
@@ -127,13 +136,13 @@ export async function fetchEvents(params?: {
       const status = [res.status, res.statusText].filter(Boolean).join(' ');
       const reason = await getResponseErrorReason(res);
       throw new Error(
-        `Failed to fetch events${status ? ` (${status})` : ''}${reason ? `: ${reason}` : ''}`,
+        `Failed to fetch events from ${url}${status ? ` (${status})` : ''}${reason ? `: ${reason}` : ''}`,
       );
     }
 
     return res.json();
   } catch (error) {
-    throw new Error(formatEventFetchErrorMessage(error));
+    throw new Error(formatEventFetchErrorMessage(error, url));
   }
 }
 

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 # Set dummy env vars BEFORE importing src.main to avoid Database init error
 os.environ["SUPABASE_URL"] = "https://example.supabase.co"
 os.environ["SUPABASE_KEY"] = "dummy-key"
+os.environ["SERVICE_ROLE_KEY"] = ""
 
 from fastapi.testclient import TestClient
 from src.main import app, backend
@@ -456,7 +457,7 @@ def test_FR11_capacity_limits():
 
     with patch_auth_valid():
         with patch.object(backend.db.client, 'table', side_effect=table_at_cap):
-            payload: dict[str, Any] = {"event_id": 10, "user_id": "user-1"}
+            payload: dict[str, Any] = {"event_id": 10, "user_id": MOCK_USER_ID}
             response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
             assert response.status_code == 400
             assert "Event is full" in response.json()["detail"]
@@ -466,7 +467,7 @@ def test_FR11_capacity_limits():
     unlimited_response.data = {"attendee_count": 500, "capacity": 0}
 
     attendance_insert_response = MagicMock()
-    attendance_insert_response.data = [{"id": 99, "event_id": 10, "user_id": "user-1"}]
+    attendance_insert_response.data = [{"id": 99, "event_id": 10, "user_id": MOCK_USER_ID}]
 
     rpc_response = MagicMock()
     rpc_response.data = 501
@@ -484,7 +485,7 @@ def test_FR11_capacity_limits():
     with patch_auth_valid():
         with patch.object(backend.db.client, 'table', side_effect=table_unlimited):
             with patch.object(backend.db.client, 'rpc', return_value=MagicMock(execute=MagicMock(return_value=rpc_response))):
-                payload = {"event_id": 10, "user_id": "user-1"}
+                payload = {"event_id": 10, "user_id": MOCK_USER_ID}
                 response = client.post("/api/rsvp", json=payload, headers=AUTH_HEADER)
                 assert response.status_code == 201, f"Expected 201 for unlimited capacity, got {response.status_code}: {response.json()}"
 
