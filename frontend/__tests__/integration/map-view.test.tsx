@@ -18,6 +18,10 @@ jest.mock('next/link', () => {
 // Mock the API module
 jest.mock('../../lib/api', () => ({
   fetchEvents: jest.fn(),
+  formatEventFetchErrorMessage: (error: { message?: string }) =>
+    error.message?.startsWith('Failed to fetch events')
+      ? error.message
+      : `Failed to fetch events: ${error.message ?? 'Unknown error'}`,
 }))
 
 // Mock the MapView component (Leaflet requires browser DOM APIs not available in jsdom)
@@ -183,7 +187,7 @@ describe('NFR-13: Map Integration', () => {
     render(<DashboardPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load events. Please try again.')).toBeInTheDocument()
+      expect(screen.getByText('Failed to fetch events: Network error')).toBeInTheDocument()
     })
 
     fireEvent.click(screen.getByTestId('view-toggle-map'))

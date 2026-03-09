@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import MagneticButton from '@/components/MagneticButton';
-import { fetchEvents, type EventResponse } from '@/lib/api';
+import { fetchEvents, formatEventFetchErrorMessage, type EventResponse } from '@/lib/api';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
@@ -86,8 +86,8 @@ export default function DashboardPage() {
       }
       const data = await fetchEvents(Object.keys(params).length > 0 ? params : undefined);
       setEvents(data.map(toEvent));
-    } catch {
-      setError('Unable to load events. Please try again.');
+    } catch (error) {
+      setError(formatEventFetchErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -406,7 +406,7 @@ export default function DashboardPage() {
               <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white shadow-sm">
                 <p className="text-red-600 mb-4">{error}</p>
                 <button
-                  onClick={() => loadEvents(radiusFilter, timeFilter)}
+                  onClick={() => loadEvents(radiusFilter, timeFilter, activeSearch)}
                   className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-500 transition-colors"
                 >
                   Retry

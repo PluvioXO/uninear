@@ -19,6 +19,55 @@ function resolveApiBaseUrl(): string {
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+function normalizeErrorText(value: string): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  return normalized.length > 300
+    ? `${normalized.slice(0, 297)}...`
+    : normalized;
+}
+
+async function getResponseErrorReason(res: Response): Promise<string | null> {
+  const rawBody = (await res.text().catch(() => '')).trim();
+  if (!rawBody) {
+    return null;
+  }
+
+  try {
+    const body = JSON.parse(rawBody) as { detail?: unknown; message?: unknown };
+
+    if (typeof body.detail === 'string') {
+      return normalizeErrorText(body.detail);
+    }
+
+    if (typeof body.message === 'string') {
+      return normalizeErrorText(body.message);
+    }
+
+    return normalizeErrorText(JSON.stringify(body));
+  } catch {
+    return normalizeErrorText(rawBody);
+  }
+}
+
+function getErrorMessage(error: unknown, fallback = 'Unknown error'): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+export function formatEventFetchErrorMessage(error: unknown): string {
+  const message = getErrorMessage(error);
+  return message.startsWith('Failed to fetch events')
+    ? message
+    : `Failed to fetch events: ${message}`;
+}
+
 /**
  * Authenticated fetch wrapper that attaches Authorization: Bearer {token}
  * to all requests to the backend API.
@@ -70,11 +119,22 @@ export async function fetchEvents(params?: {
   if (qsStr) {
     url += `?${qsStr}`;
   }
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch events: ${res.status}`);
+
+  try {
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      const status = [res.status, res.statusText].filter(Boolean).join(' ');
+      const reason = await getResponseErrorReason(res);
+      throw new Error(
+        `Failed to fetch events${status ? ` (${status})` : ''}${reason ? `: ${reason}` : ''}`,
+      );
+    }
+
+    return res.json();
+  } catch (error) {
+    throw new Error(formatEventFetchErrorMessage(error));
   }
-  return res.json();
 }
 
 export interface EventResponse {

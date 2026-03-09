@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { fetchEvents, rsvpToEvent, cancelRsvp, getUserRsvps, type EventResponse } from '@/lib/api';
+import { fetchEvents, formatEventFetchErrorMessage, rsvpToEvent, cancelRsvp, getUserRsvps, type EventResponse } from '@/lib/api';
 import { getSupabase } from '@/lib/supabase';
 
 export default function EventDetailPage() {
@@ -48,8 +48,8 @@ export default function EventDetailPage() {
           return;
         }
         setEvent(found);
-      } catch {
-        setError('Failed to load event details');
+      } catch (error) {
+        setError(formatEventFetchErrorMessage(error));
       } finally {
         setLoading(false);
       }

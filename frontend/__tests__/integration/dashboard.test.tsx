@@ -18,6 +18,10 @@ jest.mock('next/link', () => {
 // Mock the API module
 jest.mock('../../lib/api', () => ({
   fetchEvents: jest.fn(),
+  formatEventFetchErrorMessage: (error: { message?: string }) =>
+    error.message?.startsWith('Failed to fetch events')
+      ? error.message
+      : `Failed to fetch events: ${error.message ?? 'Unknown error'}`,
 }))
 
 import { fetchEvents } from '../../lib/api'
@@ -116,7 +120,7 @@ describe('FR-01: Event List Display', () => {
     render(<DashboardPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load events. Please try again.')).toBeInTheDocument()
+      expect(screen.getByText('Failed to fetch events: Network error')).toBeInTheDocument()
     })
     expect(screen.getByText('Retry')).toBeInTheDocument()
   })
@@ -195,7 +199,7 @@ describe('NFR-14: Event API Integration', () => {
 
     await waitFor(() => {
       // AC-2: correct error message
-      expect(screen.getByText('Unable to load events. Please try again.')).toBeInTheDocument()
+      expect(screen.getByText('Failed to fetch events: Server error')).toBeInTheDocument()
     })
 
     // AC-2: retry button present

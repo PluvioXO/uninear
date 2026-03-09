@@ -1,4 +1,4 @@
-import { apiFetch } from '../../lib/api';
+import { apiFetch, fetchEvents } from '../../lib/api';
 
 // Mock auth.ts getToken
 jest.mock('../../lib/auth', () => ({
@@ -68,6 +68,29 @@ describe('apiFetch', () => {
         method: 'POST',
         body: '{"title":"Test"}',
       }),
+    );
+  });
+});
+
+describe('fetchEvents', () => {
+  it('includes backend detail in the thrown error message', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      text: async () => JSON.stringify({ detail: 'Unable to load events' }),
+    });
+
+    await expect(fetchEvents()).rejects.toThrow(
+      'Failed to fetch events (503 Service Unavailable): Unable to load events',
+    );
+  });
+
+  it('includes the original network error reason', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    await expect(fetchEvents()).rejects.toThrow(
+      'Failed to fetch events: Failed to fetch',
     );
   });
 });
