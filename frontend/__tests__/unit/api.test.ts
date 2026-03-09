@@ -1,4 +1,4 @@
-import { apiFetch, fetchEvents } from '../../lib/api';
+import { apiFetch, fetchEvents, formatEventFetchErrorMessage } from '../../lib/api';
 
 // Mock auth.ts getToken
 jest.mock('../../lib/auth', () => ({
@@ -92,5 +92,26 @@ describe('fetchEvents', () => {
     await expect(fetchEvents()).rejects.toThrow(
       'Failed to fetch events: Failed to fetch',
     );
+  });
+
+  it('includes plain-text backend responses in the thrown error message', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      statusText: 'Bad Gateway',
+      text: async () => 'upstream timeout',
+    });
+
+    await expect(fetchEvents()).rejects.toThrow(
+      'Failed to fetch events (502 Bad Gateway): upstream timeout',
+    );
+  });
+});
+
+describe('formatEventFetchErrorMessage', () => {
+  it('does not double-prefix an existing fetch error message', () => {
+    expect(
+      formatEventFetchErrorMessage(new Error('Failed to fetch events: Network error')),
+    ).toBe('Failed to fetch events: Network error');
   });
 });

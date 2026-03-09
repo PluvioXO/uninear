@@ -144,6 +144,41 @@ describe('FR-01: Event List Display', () => {
     expect(mockFetchEvents).toHaveBeenCalledTimes(2)
   })
 
+  it('retries with the active search and time filters after an error', async () => {
+    mockFetchEvents
+      .mockResolvedValueOnce(MOCK_EVENTS)
+      .mockResolvedValueOnce(MOCK_EVENTS)
+      .mockRejectedValueOnce(new Error('Search backend unavailable'))
+      .mockResolvedValueOnce([MOCK_EVENTS[0]])
+
+    render(<DashboardPage />)
+    await waitFor(() => expect(mockFetchEvents).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByTestId('time-filter-2hr'))
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenCalledWith({ time_filter: '2hr' })
+    })
+
+    const searchInput = screen.getByTestId('search-input')
+    fireEvent.change(searchInput, { target: { value: 'hackathon' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter', charCode: 13 })
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to fetch events: Search backend unavailable')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Retry'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Annual Tech Hackathon')).toBeInTheDocument()
+    })
+
+    expect(mockFetchEvents).toHaveBeenLastCalledWith({
+      time_filter: '2hr',
+      search: 'hackathon',
+    })
+  })
+
   it('displays event details: title, date, location, attendee count', async () => {
     render(<DashboardPage />)
 
