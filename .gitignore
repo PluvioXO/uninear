@@ -42,6 +42,20 @@ build/
 # README (ignored per request)
 README.md
 
+# Documentation (kept local, not committed)
+documentation/D2-PRESENTATION-FULL-SCRIPT.md
+documentation/D2-PRESENTATION-OUTLINE.md
+documentation/D2-TEAM-TASK-ASSIGNMENTS.md
+documentation/D2-TEAM-BRIEFING.md
+documentation/D2-DEMO-TASKS.md
+documentation/ARTHUR-ONBOARDING.md
+documentation/SPRINT-PLAN.md
+documentation/TEAM-JIRA-GUIDE.md
+documentation/D2-PRESENTATION-FULL-SCRIPT.md
+
+# BMAD output (internal tooling)
+_bmad-output/
+
 # --- Python & Backend ---
 __pycache__/
 *.pyc
