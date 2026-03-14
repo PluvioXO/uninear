@@ -600,7 +600,27 @@ def test_FR21_get_user_rsvps_with_event_data():
             assert response.status_code == 200
             body = response.json()
             assert isinstance(body, list)
+            assert len(body) == 1
+            assert body[0]["id"] == 1
+            assert body[0]["event_id"] == 10
+            assert body[0]["user_id"] == MOCK_USER_ID
+            assert body[0]["created_at"] == "2025-02-01T10:00:00"
             assert body[0]["event"]["id"] == 10
+            assert body[0]["event"]["title"] == "Test Event"
+            assert body[0]["event"]["location"] == "Hall"
+            assert body[0]["event"]["start_time"] == "2025-02-02T10:00:00"
+
+            attendance_table.select.assert_called_once_with("id, event_id, user_id, created_at")
+            attendance_table.select.return_value.eq.assert_called_once_with("user_id", MOCK_USER_ID)
+            events_table.select.assert_called_once_with("*")
+            events_table.select.return_value.in_.assert_called_once_with("id", [10])
+
+def test_FR21_get_user_rsvps_forbidden_for_other_user():
+    with patch_auth_valid():
+        response = client.get("/api/rsvp", params={"user_id": "other-user-id"}, headers=AUTH_HEADER)
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Cannot view RSVPs for another user"
 
 # 8b. test_FR14_get_event_rsvps — organiser views attendee list
 def test_FR14_get_event_rsvps():
