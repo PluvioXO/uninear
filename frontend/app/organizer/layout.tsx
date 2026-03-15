@@ -17,7 +17,7 @@ export default function OrganizerLayout({ children }: { children: React.ReactNod
 
   return (
     <div>
-      {/* Dashboard Navigation */}
+      {/* Organiser Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-white/50 backdrop-blur-md border-b border-gray-200">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-8">

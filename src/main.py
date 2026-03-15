@@ -147,7 +147,7 @@ class UniNearBackend:
             response = (
                 self.db.client
                 .table("events")
-                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, latitude, longitude")
+                .select("id, title, description, location, start_time, end_time, capacity, attendee_count, status, mood_tags, organizer, energy_level, latitude, longitude")
                 .eq("status", "Published")
                 .gte("start_time", now.isoformat())
                 .order("start_time")
@@ -199,6 +199,8 @@ class UniNearBackend:
             event_data = event.model_dump(exclude_none=True)
             if 'date' in event_data:
                 event_data['start_time'] = event_data.pop('date').isoformat()
+            if 'end_date' in event_data:
+                event_data['end_time'] = event_data.pop('end_date').isoformat()
             event_data['organiser_id'] = user['user_id']
 
             # Use admin client to bypass RLS insert policy (the anon-key client
@@ -231,7 +233,9 @@ class UniNearBackend:
 
             event_data = event.model_dump(exclude_unset=True)
             if 'date' in event_data and event_data['date']:
-                 event_data['start_time'] = event_data.pop('date').isoformat()
+                event_data['start_time'] = event_data.pop('date').isoformat()
+            if 'end_date' in event_data and event_data['end_date']:
+                event_data['end_time'] = event_data.pop('end_date').isoformat()
 
             response = db.table("events").update(event_data).eq("id", event_id).execute()
             if not response.data:
@@ -416,7 +420,7 @@ class UniNearBackend:
             db = self.db.admin or self.db.client
             response = (
                 db.table("events")
-                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, latitude, longitude")
+                .select("id, title, description, location, start_time, end_time, capacity, attendee_count, status, organizer, latitude, longitude")
                 .eq("organiser_id", user["user_id"])
                 .execute()
             )

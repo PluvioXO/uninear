@@ -6,13 +6,13 @@ class EventCreateSchema(BaseModel):
     title: str
     description: Optional[str] = None
     date: datetime  # Frontend sends 'date'
+    end_date: datetime = None
     location: str
     capacity: int = 0
     status: str = "Draft"
     organizer: Optional[str] = None
     
     # Legacy/Optional fields
-    end_time: Optional[datetime] = None
     mood_tags: List[str] = []
     energy_level: Optional[str] = None
     organiser_id: Optional[str] = None
@@ -23,6 +23,7 @@ class EventUpdateSchema(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     location: Optional[str] = None
     capacity: Optional[int] = None
     status: Optional[str] = None
@@ -83,9 +84,12 @@ class EventResponseSchema(BaseModel):
     description: Optional[str] = None
     location: str
     start_time: datetime
+    end_time: Optional[datetime] = None
     capacity: int
     attendee_count: int
     status: str = "Published"
+    mood_tags: List[str] = []
+    energy_level: Optional[str] = None
     organizer: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None

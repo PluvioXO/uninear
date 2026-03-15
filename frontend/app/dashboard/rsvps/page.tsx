@@ -13,7 +13,6 @@ interface RsvpdEvent {
   location: string;
   attendees: number;
   capacity: number;
-  length?: string;
 }
 
 /** Map API response to local RsvpdEvent shape */
@@ -25,7 +24,6 @@ function toRsvpdEvent(e: EventResponse): RsvpdEvent {
     location: e.location,
     attendees: e.attendee_count,
     capacity: e.capacity,
-    // length: e.length,
   };
 }
 

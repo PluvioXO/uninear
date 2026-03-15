@@ -83,10 +83,13 @@ export interface EventResponse {
   description?: string;
   location: string;
   start_time: string;
+  end_time?: string;
   capacity: number;
   attendee_count: number;
+  mood_tags: string[];
   status: string;
   organizer?: string;
+  energy_level: string;
   latitude?: number;
   longitude?: number;
 }
@@ -131,12 +134,15 @@ export async function cancelRsvp(eventId: number, userId: string): Promise<Respo
 export async function createEvent(data: {
   title: string;
   date: string;
+  end_date: string;
   location: string;
+  latitude: number;
+  longitude: number;
   capacity: number;
+  mood_tags: string[];
   organizer?: string;
   status?: string;
-  mood_tags?: string[];
-  energy_level?: string;
+  energy_level: string;
   description?: string;
 }): Promise<Response> {
   return apiFetch('/events', {

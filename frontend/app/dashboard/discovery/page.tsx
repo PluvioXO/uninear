@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { fetchEvents, type EventResponse } from '@/lib/api';
+import { fetchEvents, type EventResponse, getUserRsvps } from '@/lib/api';
+import { getSupabase } from '@/lib/supabase';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
@@ -20,13 +21,12 @@ interface Event {
   title: string;
   description?: string;
   date: string;
+  end_date?: string;
   location: string;
   attendees: number;
   capacity: number;
-  status: 'Published' | 'Draft' | 'Scheduled' | 'Past';
   moods?: string[];
   energy?: 'Low' | 'Medium' | 'High';
-  length?: string;
   latitude?: number;
   longitude?: number;
 }
@@ -38,12 +38,10 @@ function toEvent(e: EventResponse): Event {
     title: e.title,
     description: e.description,
     date: e.start_time,
+    end_date: e.end_time,
     location: e.location,
     attendees: e.attendee_count,
     capacity: e.capacity,
-    status: (['Published', 'Draft', 'Scheduled', 'Past'].includes(e.status)
-      ? e.status as Event['status']
-      : 'Published'),
     latitude: e.latitude,
     longitude: e.longitude,
   };
@@ -62,6 +60,8 @@ export default function DiscoveryPage() {
   const [timeFilter, setTimeFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
+  const [rsvpdEvents, setRsvpdEvents] = useState<number[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadEvents = useCallback(async (radius?: number | null, time?: string | null, search?: string) => {
@@ -98,6 +98,33 @@ export default function DiscoveryPage() {
     };
   }, []);
 
+  // Get current user
+  useEffect(() => {
+    getSupabase().auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        setUserId(data.session.user.id);
+      }
+    });
+  }, []);
+
+  //Check RSVP status of all events
+  const checkRsvpStatus = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await getUserRsvps(userId);
+      if (res.ok) {
+        const rsvps = await res.json();
+        setRsvpdEvents(rsvps.filter((r: { event_id: number }) => events.map(e => e.id).includes(r.event_id)).map((r: { event_id: number }) => r.event_id));
+      }
+    } catch {
+      // Silently fail — user just won't see RSVP status
+    }
+  }, [userId, events]);
+
+  useEffect(() => {
+    checkRsvpStatus();
+  }, [checkRsvpStatus]);
+
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -105,15 +132,6 @@ export default function DiscoveryPage() {
       setActiveSearch(value);
     }, 300);
   };
-
-  // Derived state for statistics
-  const totalMembers = 1248; // Static for now
-  const activeEventsCount = events.length;
-  const totalAttendees = events.reduce((acc, curr) => acc + curr.attendees, 0);
-  const eventsWithCapacity = events.filter(e => e.capacity > 0);
-  const avgAttendance = eventsWithCapacity.length > 0
-    ? Math.round(eventsWithCapacity.reduce((acc, curr) => acc + (curr.attendees / curr.capacity), 0) / eventsWithCapacity.length * 100)
-    : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden">
@@ -125,25 +143,6 @@ export default function DiscoveryPage() {
             <p className="text-gray-400">Find the perfect event for you.</p>
           </div>
         </div>
-
-        {/* Stats Grid */}
-        {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          {[
-            { label: 'Total Members', value: totalMembers.toLocaleString(), change: '+12% this month', accent: 'bg-orange-100 text-orange-600' },
-            { label: 'Active Events', value: activeEventsCount.toString(), change: 'Currently live', accent: 'bg-blue-100 text-blue-600' },
-            { label: 'Total Attendees', value: totalAttendees.toLocaleString(), change: 'All time', accent: 'bg-emerald-100 text-emerald-600' },
-            { label: 'Avg. Capacity', value: `${avgAttendance}%`, change: 'Across all events', accent: 'bg-pink-100 text-pink-600' }
-          ].map((stat, i) => (
-            <div key={i} className="border border-gray-200 rounded-3xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start mb-4">
-                <div className={`w-10 h-10 ${stat.accent} rounded-full flex items-center justify-center`} />
-                <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{stat.change}</span>
-              </div>
-              <p className="text-sm uppercase tracking-widest text-gray-500 mb-1">{stat.label}</p>
-              <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-            </div>
-          ))}
-        </div> */}
 
         {/* Main Content Grid */}
         <div className="grid lg:grid-cols-3 gap-8">
@@ -288,14 +287,7 @@ export default function DiscoveryPage() {
                         {new Date(event.date).toLocaleDateString()} • {new Date(event.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {event.location}
                       </p>
                       <div className="flex items-center gap-3 text-xs font-medium">
-                        <span className={`px-2 py-1 rounded-md ${
-                          event.status === 'Published' ? 'bg-emerald-100 text-emerald-700' :
-                          event.status === 'Draft' ? 'bg-gray-100 text-gray-700' :
-                          event.status === 'Past' ? 'bg-red-100 text-red-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {event.status}
-                        </span>
+                        {rsvpdEvents.includes(event.id) ? <span className="px-2 py-1 rounded-md bg-emerald-100 text-emerald-700">RSVP'd!</span> : ''}
                         <span className={`${event.capacity > 0 && event.attendees >= event.capacity ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
                           {event.capacity > 0 && event.attendees >= event.capacity
                             ? 'Event is full'
