@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import DashboardPage from '../../app/dashboard/page'
+import DiscoveryPage from '../../app/dashboard/discovery/page'
 
 // Mock MagneticButton
 jest.mock('../../components/MagneticButton', () => {
@@ -89,7 +89,7 @@ beforeEach(() => {
 
 describe('FR-08: Map View', () => {
   it('test_FR08_map_view: renders list/map toggle on dashboard', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     expect(screen.getByTestId('view-toggle')).toBeInTheDocument()
@@ -98,7 +98,7 @@ describe('FR-08: Map View', () => {
   })
 
   it('test_FR08_map_view: defaults to list view', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     // List view should show event titles directly
@@ -108,7 +108,7 @@ describe('FR-08: Map View', () => {
   })
 
   it('test_FR08_map_view: switches to map view and displays markers', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     // Click map toggle
@@ -127,7 +127,7 @@ describe('FR-08: Map View', () => {
   })
 
   it('test_FR08_map_view: marker shows event title', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     fireEvent.click(screen.getByTestId('view-toggle-map'))
@@ -139,7 +139,7 @@ describe('FR-08: Map View', () => {
   })
 
   it('test_FR08_map_view: can switch back to list view', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     // Switch to map
@@ -159,7 +159,7 @@ describe('FR-08: Map View', () => {
 
 describe('NFR-13: Map Integration', () => {
   it('test_NFR13_google_maps_integration: map component loads when toggled', async () => {
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
     await waitFor(() => expect(mockFetchEvents).toHaveBeenCalled())
 
     fireEvent.click(screen.getByTestId('view-toggle-map'))
@@ -172,7 +172,7 @@ describe('NFR-13: Map Integration', () => {
   it('test_NFR13_google_maps_integration: shows loading state in map mode', async () => {
     mockFetchEvents.mockReturnValue(new Promise(() => {}))
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     fireEvent.click(screen.getByTestId('view-toggle-map'))
 
@@ -184,7 +184,7 @@ describe('NFR-13: Map Integration', () => {
   it('test_NFR13_google_maps_integration: shows error state with retry in map mode', async () => {
     mockFetchEvents.mockRejectedValue(new Error('Network error'))
 
-    render(<DashboardPage />)
+    render(<DiscoveryPage />)
 
     await waitFor(() => {
       expect(screen.getByText('Failed to fetch events: Network error')).toBeInTheDocument()

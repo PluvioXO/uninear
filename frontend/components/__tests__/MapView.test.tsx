@@ -111,7 +111,7 @@ describe('MapView Component', () => {
 
     const popupHtml = mockBindPopup.mock.calls[0][0] as string
     expect(popupHtml).toContain('View Details')
-    expect(popupHtml).toContain('/dashboard/events/42')
+    expect(popupHtml).toContain('/dashboard/discovery/42')
   })
 
   it('popup contains attendee count', () => {

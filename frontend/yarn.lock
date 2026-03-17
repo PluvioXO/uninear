@@ -3097,9 +3097,9 @@ flat-cache@^4.0.0:
     keyv "^4.5.4"
 
 flatted@^3.2.9:
-  version "3.3.3"
-  resolved "https://registry.npmjs.org/flatted/-/flatted-3.3.3.tgz"
-  integrity sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg==
+  version "3.4.1"
+  resolved "https://registry.npmjs.org/flatted/-/flatted-3.4.1.tgz"
+  integrity sha512-IxfVbRFVlV8V/yRaGzk0UVIcsKKHMSfYw66T/u4nTwlWteQePsxe//LjudR1AMX4tZW3WFCh3Zqa/sjlqpbURQ==
 
 for-each@^0.3.3, for-each@^0.3.5:
   version "0.3.5"
@@ -4759,6 +4759,11 @@ parent-module@^1.0.0:
   integrity sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==
   dependencies:
     callsites "^3.0.0"
+
+parse-duration@^2.1.5:
+  version "2.1.5"
+  resolved "https://registry.npmjs.org/parse-duration/-/parse-duration-2.1.5.tgz"
+  integrity sha512-/IX1KRw6zHDOOJrgIz++gvFASbFl7nc8GEXaLdD7d1t1x/GnrK6hh5Fgk8G3RLpkIEi4tsGj9pupGLWNg0EiJA==
 
 parse-json@^5.2.0:
   version "5.2.0"

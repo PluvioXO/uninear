@@ -23,7 +23,8 @@
     "react-dom": "19.2.4",
     "react-leaflet": "^5.0.0",
     "recharts": "^3.7.0",
-    "three": "^0.182.0"
+    "three": "^0.182.0",
+    "parse-duration": "^2.1.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

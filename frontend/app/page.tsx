@@ -90,13 +90,15 @@ export default function Home() {
           <div className="flex flex-col md:flex-row gap-4 justify-center opacity-0 animate-fade-in-up" style={{ animationDelay: '0.8s', animationFillMode: 'forwards' }}>
             <MagneticButton
               label="Launch event"
+              href="/organizer/events"
               subtitle="Create in seconds"
               className="bg-gray-900 text-white text-base shadow-[0_0_40px_rgba(249,115,22,0.3)]"
               accentClassName="from-white via-orange-200 to-yellow-200"
               type="button"
             />
             <MagneticButton
-              label="View dashboard"
+              label="Discover events"
+              href="/dashboard/discovery"
               className="border border-gray-200 bg-white text-gray-900"
               accentClassName="from-orange-500/60 via-amber-500/60 to-yellow-500/60"
               type="button"
