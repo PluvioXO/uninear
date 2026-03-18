@@ -64,18 +64,64 @@ const DEFAULT_PROFILE = {
   interests: []
 };
 
+const buildAvatarUrl = (name) => (
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Student Member')}&background=ea580c&color=fff&size=128`
+);
+
+const normalizeProfilePayload = (payload, fallbackProfile = DEFAULT_PROFILE) => {
+  const fallback = fallbackProfile || DEFAULT_PROFILE;
+  const resolvedName =
+    typeof payload?.full_name === 'string' && payload.full_name.trim().length > 0
+      ? payload.full_name.trim()
+      : typeof payload?.name === 'string' && payload.name.trim().length > 0
+        ? payload.name.trim()
+        : fallback.name || DEFAULT_PROFILE.name;
+
+  const interestsSource = Array.isArray(payload?.interests) ? payload.interests : fallback.interests;
+  const interests = (Array.isArray(interestsSource) ? interestsSource : [])
+    .filter((interest) => typeof interest === 'string' && interest.trim().length > 0)
+    .map((interest) => interest.trim());
+
+  return {
+    name: resolvedName,
+    email:
+      typeof payload?.email === 'string' && payload.email.trim().length > 0
+        ? payload.email.trim()
+        : fallback.email || DEFAULT_PROFILE.email,
+    avatar: buildAvatarUrl(resolvedName),
+    bio: typeof payload?.bio === 'string' ? payload.bio : fallback.bio ?? DEFAULT_PROFILE.bio,
+    location: typeof payload?.location === 'string' ? payload.location : fallback.location ?? DEFAULT_PROFILE.location,
+    interests,
+  };
+};
+
+const getEventMoodTags = (event) => {
+  const source = Array.isArray(event?.mood_tags)
+    ? event.mood_tags
+    : Array.isArray(event?.moods)
+      ? event.moods
+      : [];
+
+  return source
+    .filter((mood) => typeof mood === 'string' && mood.trim().length > 0)
+    .map((mood) => mood.trim());
+};
+
+const getNormalizedMoodTags = (event) => (
+  getEventMoodTags(event).map((mood) => mood.toLowerCase())
+);
+
+const normalizeEnergyLevel = (value) => (
+  typeof value === 'string' && value.trim().length > 0
+    ? value.trim().toLowerCase()
+    : null
+);
+
 // Mock User Location (Bath, UK)
 const USER_LOCATION = {
   latitude: 51.3782,
   longitude: -2.3264
 };
-
-// Seed societies — these also get created dynamically from event organisers
-const SEED_SOCIETIES = [
-  { id: 'bath-cs', name: 'Bath CS Society', description: 'Computing events, hackathons & talks.', avatar: 'https://ui-avatars.com/api/?name=CS+Society&background=ea580c&color=fff' },
-  { id: 'bath-tech', name: 'Bath Tech Hub', description: 'Industry connections and workshops.', avatar: 'https://ui-avatars.com/api/?name=Tech+Hub&background=3b82f6&color=fff' },
-  { id: 'bath-ents', name: 'Bath Ents', description: 'Social events and nights out.', avatar: 'https://ui-avatars.com/api/?name=Bath+Ents&background=f59e0b&color=fff' },
-];
 
 const getDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371e3; // metres
@@ -109,17 +155,13 @@ export default function App() {
   const [eventScope, setEventScope] = useState('all'); // 'all' | 'rsvped' | 'attended'
   const [dateSortOrder, setDateSortOrder] = useState('asc'); // 'asc' | 'desc'
   const [viewMode, setViewMode] = useState('list'); // 'list', 'map', 'filter'
-  const [currentTab, setCurrentTab] = useState('events'); // 'events', 'friends', 'profile'
+  const [currentTab, setCurrentTab] = useState('events'); // 'events', 'profile'
   const [selectedEvent, setSelectedEvent] = useState(null); // event detail modal
   
   // Profile State
   const [userProfile, setUserProfile] = useState(DEFAULT_PROFILE);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState(DEFAULT_PROFILE);
-  const [profileTab, setProfileTab] = useState('info'); // 'info' | 'following'
-
-  // Following State — set of society/organiser IDs
-  const [followedIds, setFollowedIds] = useState(new Set(['bath-cs']));
 
   // Filter State
   const [showFilters, setShowFilters] = useState(false);
@@ -127,8 +169,6 @@ export default function App() {
   const [timeRange, setTimeRange] = useState(null);
   const [selectedMoods, setSelectedMoods] = useState([]);
   const [selectedEnergy, setSelectedEnergy] = useState(null);
-  const [minRating, setMinRating] = useState(null);
-  const [friends] = useState([]);
   const [rsvpEventIds, setRsvpEventIds] = useState(new Set());
   const [rsvpRecords, setRsvpRecords] = useState([]);
   const [rsvpLoadingIds, setRsvpLoadingIds] = useState(new Set());
@@ -186,19 +226,17 @@ export default function App() {
     const session = payload?.session || payload?.data?.session || null;
     const user = payload?.user || payload?.data?.user || session?.user || null;
     const accessToken = session?.access_token || payload?.access_token || payload?.data?.access_token || null;
-    const userName = user?.user_metadata?.full_name || user?.full_name || fallbackEmail.split('@')[0];
 
     return {
       accessToken,
       userId: user?.id || null,
-      profile: {
-        name: userName,
+      profile: normalizeProfilePayload({
+        full_name: user?.user_metadata?.full_name || user?.full_name || fallbackEmail.split('@')[0],
         email: user?.email || fallbackEmail,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=ea580c&color=fff&size=128`,
-        bio: 'Tell people about yourself.',
-        location: 'Bath, UK',
-        interests: [],
-      },
+        bio: user?.user_metadata?.bio,
+        location: user?.user_metadata?.location,
+        interests: user?.user_metadata?.interests,
+      }),
     };
   };
 
@@ -228,6 +266,33 @@ export default function App() {
     }
     if (typeof payload?.message === 'string' && payload.message.trim().length > 0) return payload.message;
     return fallbackMessage;
+  };
+
+  const loadPersistedProfile = async (token, fallbackProfile) => {
+    if (!token) return fallbackProfile;
+
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 3000) : null;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        ...(controller ? { signal: controller.signal } : {}),
+      });
+
+      if (!response.ok) {
+        return fallbackProfile;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      return normalizeProfilePayload(payload, fallbackProfile);
+    } catch {
+      return fallbackProfile;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
   };
 
   const submitLogin = async () => {
@@ -270,6 +335,11 @@ export default function App() {
       setCurrentTab('events');
       setViewMode('list');
       setAuthPassword('');
+
+      loadPersistedProfile(parsed.accessToken, parsed.profile).then((hydratedProfile) => {
+        setUserProfile(hydratedProfile);
+        setEditForm((current) => (current === parsed.profile ? hydratedProfile : current));
+      });
     } catch (err) {
       if (String(err?.message || '').toLowerCase().includes('network request failed')) {
         setAuthError(`Cannot reach API at ${API_BASE_URL}. Make sure FastAPI is running and reachable from this device.`);
@@ -369,6 +439,9 @@ export default function App() {
     setEvents([]);
     setRsvpEventIds(new Set());
     setRsvpRecords([]);
+    setUserProfile(DEFAULT_PROFILE);
+    setEditForm(DEFAULT_PROFILE);
+    setIsEditingProfile(false);
     setAuthPassword('');
     setAuthMode('login');
     setEventScope('all');
@@ -628,14 +701,12 @@ export default function App() {
 
     // Mood Filter
     if (selectedMoods.length > 0) {
-      if (!event.moods || !event.moods.some(m => selectedMoods.includes(m))) return false;
+      const eventMoodTags = getNormalizedMoodTags(event);
+      if (!eventMoodTags.some((mood) => selectedMoods.includes(mood))) return false;
     }
 
     // Energy Filter
-    if (selectedEnergy && event.energy_level !== selectedEnergy) return false;
-
-    // Rating Filter
-    if (minRating && (event.rating || 0) < minRating) return false;
+    if (selectedEnergy && normalizeEnergyLevel(event.energy_level) !== selectedEnergy) return false;
 
     return true;
   });
@@ -674,7 +745,6 @@ export default function App() {
     timeRange !== null,
     selectedMoods.length > 0,
     selectedEnergy !== null,
-    minRating !== null,
   ].filter(Boolean).length;
 
   const resetFilters = () => {
@@ -682,69 +752,76 @@ export default function App() {
     setTimeRange(null);
     setSelectedMoods([]);
     setSelectedEnergy(null);
-    setMinRating(null);
   };
-
-  // Build a deduplicated society list from seed + live event organisers
-  const allSocieties = (() => {
-    const map = new Map(SEED_SOCIETIES.map(s => [s.id, s]));
-    events.forEach(e => {
-      if (e.organizer) {
-        const id = e.organizer.toLowerCase().replace(/\s+/g, '-');
-        if (!map.has(id)) {
-          map.set(id, {
-            id,
-            name: e.organizer,
-            description: 'Society on Uninear.',
-            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.organizer)}&background=ea580c&color=fff`,
-          });
-        }
-      }
-    });
-    return Array.from(map.values());
-  })();
-
-  const toggleFollow = (societyId) => {
-    setFollowedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(societyId)) {
-        next.delete(societyId);
-      } else {
-        next.add(societyId);
-      }
-      return next;
-    });
-  };
-
-  const followedSocieties = allSocieties.filter(s => followedIds.has(s.id));
-
-  const renderFriendItem = ({ item }) => (
-    <View style={styles.friendCard}>
-      <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
-      <View style={styles.friendInfo}>
-        <Text style={styles.friendName}>{item.name}</Text>
-        <Text style={styles.friendStatus}>{item.status}</Text>
-      </View>
-      <TouchableOpacity style={styles.messageButton}>
-        <Text style={styles.messageButtonText}>Message</Text>
-      </TouchableOpacity>
-    </View>
-  );
 
   function isBathEmail(email) {
     return /^[^@\s]+@bath\.ac\.uk$/i.test(email);
   }
   const isProfileSaveDisabled = !isBathEmail(editForm.email);
 
-  const saveProfile = () => {
+  const applyProfileLocally = (nextProfile) => {
+    setUserProfile(nextProfile);
+    setEditForm(nextProfile);
+    setIsEditingProfile(false);
+  };
+
+  const saveProfile = async () => {
     if (!isBathEmail(editForm.email)) {
       Alert.alert('Invalid Email', 'Only @bath.ac.uk emails are allowed');
       return;
     }
 
-    setUserProfile(editForm);
-    setIsEditingProfile(false);
-    Alert.alert('Success', 'Profile updated successfully!');
+    const nextProfile = normalizeProfilePayload({
+      full_name: editForm.name,
+      email: editForm.email,
+      bio: editForm.bio,
+      location: editForm.location,
+      interests: editForm.interests,
+    }, editForm);
+
+    if (!authToken) {
+      applyProfileLocally(nextProfile);
+      Alert.alert('Saved locally', 'Profile updated on this device. Server sync is unavailable right now.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          full_name: nextProfile.name,
+          bio: nextProfile.bio,
+          location: nextProfile.location,
+          interests: nextProfile.interests,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          applyProfileLocally(nextProfile);
+          Alert.alert('Saved locally', 'Profile updated on this device. Server sync will work once /auth/profile is available.');
+          return;
+        }
+        throw new Error('Failed to save profile');
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      const savedProfile = normalizeProfilePayload(payload, nextProfile);
+      applyProfileLocally(savedProfile);
+      Alert.alert('Success', 'Profile updated successfully!');
+    } catch (error) {
+      if (String(error?.message || '').toLowerCase().includes('network request failed')) {
+        applyProfileLocally(nextProfile);
+        Alert.alert('Saved locally', 'Profile updated on this device. Server sync is unavailable right now.');
+        return;
+      }
+
+      Alert.alert('Error', 'Could not save profile. Please try again.');
+    }
   };
 
   const renderProfile = () => (
@@ -762,72 +839,10 @@ export default function App() {
           <Text style={styles.statNumber}>{events.length}</Text>
           <Text style={styles.statLabel}>Events</Text>
         </View>
-        <View style={styles.statDivider} />
-        <TouchableOpacity style={styles.statItem} onPress={() => setProfileTab('following')}>
-          <Text style={styles.statNumber}>{followedIds.size}</Text>
-          <Text style={styles.statLabel}>Following</Text>
-        </TouchableOpacity>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{friends.length}</Text>
-          <Text style={styles.statLabel}>Friends</Text>
-        </View>
       </View>
 
-      {/* Profile sub-tabs */}
-      <View style={styles.profileTabs}>
-        {['info', 'following'].map(tab => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.profileTabBtn, profileTab === tab && styles.profileTabBtnActive]}
-            onPress={() => setProfileTab(tab)}
-          >
-            <Text style={[styles.profileTabText, profileTab === tab && styles.profileTabTextActive]}>
-              {tab === 'info' ? 'Profile' : `Following (${followedIds.size})`}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {profileTab === 'following' ? (
-        /* ── Following list ── */
-        followedSocieties.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>🏛️</Text>
-            <Text style={styles.emptyStateText}>You're not following any societies yet.</Text>
-            <Text style={styles.emptyStateSubText}>Tap "+ Follow" on any event card to follow that society.</Text>
-          </View>
-        ) : (
-          <View>
-            {followedSocieties.map(society => {
-              const upcomingCount = events.filter(e =>
-                e.organizer &&
-                e.organizer.toLowerCase().replace(/\s+/g, '-') === society.id
-              ).length;
-              return (
-                <View key={society.id} style={styles.societyCard}>
-                  <Image source={{ uri: society.avatar }} style={styles.societyAvatar} />
-                  <View style={styles.societyInfo}>
-                    <Text style={styles.societyName}>{society.name}</Text>
-                    <Text style={styles.societyDesc} numberOfLines={1}>{society.description}</Text>
-                    {upcomingCount > 0 && (
-                      <Text style={styles.societyEvents}>{upcomingCount} event{upcomingCount !== 1 ? 's' : ''}</Text>
-                    )}
-                  </View>
-                  <TouchableOpacity
-                    style={styles.unfollowButton}
-                    onPress={() => toggleFollow(society.id)}
-                  >
-                    <Text style={styles.unfollowButtonText}>Unfollow</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </View>
-        )
-      ) : (
-        /* ── Profile info / edit ── */
-        isEditingProfile ? (
+      {/* ── Profile info / edit ── */}
+      {isEditingProfile ? (
         <View style={styles.editForm}>
           <Text style={styles.label}>Name</Text>
           <TextInput
@@ -866,7 +881,7 @@ export default function App() {
           <TextInput
             style={styles.input}
             value={editForm.interests.join(', ')}
-            onChangeText={(text) => setEditForm({...editForm, interests: text.split(',').map(i => i.trim())})}
+            onChangeText={(text) => setEditForm({...editForm, interests: text.split(',').map(i => i.trim()).filter(Boolean)})}
           />
 
           <View style={styles.editButtons}>
@@ -900,7 +915,7 @@ export default function App() {
 
           <View style={styles.infoSection}>
             <Text style={styles.sectionTitle}>Location</Text>
-            <Text style={styles.locationText}>📍 {userProfile.location}</Text>
+            <Text style={styles.locationText}>{userProfile.location}</Text>
           </View>
 
           <View style={styles.infoSection}>
@@ -937,7 +952,6 @@ export default function App() {
             </TouchableOpacity>
           </View>
         </View>
-      )
       )}
     </ScrollView>
   );
@@ -974,11 +988,10 @@ export default function App() {
   };
 
   const renderEventItem = ({ item }) => {
-    const societyId = item.organizer ? item.organizer.toLowerCase().replace(/\s+/g, '-') : null;
-    const isFollowing = societyId ? followedIds.has(societyId) : false;
     const isRsvped = rsvpEventIds.has(item.id);
     const isRsvpLoading = rsvpLoadingIds.has(item.id);
     const isPastEvent = new Date(item.start_time || item.date).getTime() < Date.now();
+    const moodTags = getEventMoodTags(item);
 
     return (
     <View style={styles.card}>
@@ -986,28 +999,16 @@ export default function App() {
         <Text style={styles.title}>{item.title}</Text>
         {item.rating && (
           <View style={styles.ratingContainer}>
-            <Text style={styles.ratingText}>★ {item.rating}</Text>
+            <Text style={styles.ratingText}>Rating {item.rating}</Text>
           </View>
         )}
       </View>
       
-      <Text style={styles.date}>{new Date(item.start_time || item.date).toLocaleDateString()} • {new Date(item.start_time || item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+      <Text style={styles.date}>{new Date(item.start_time || item.date).toLocaleDateString()} | {new Date(item.start_time || item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
       <Text style={styles.location}>{item.location}</Text>
 
       {item.organizer && (
-        <View style={styles.organizerRow}>
-          <Text style={styles.organizer}>Hosted by {item.organizer}</Text>
-          {societyId && (
-            <TouchableOpacity
-              style={[styles.followChip, isFollowing && styles.followChipActive]}
-              onPress={() => toggleFollow(societyId)}
-            >
-              <Text style={[styles.followChipText, isFollowing && styles.followChipTextActive]}>
-                {isFollowing ? '✓ Following' : '+ Follow'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <Text style={styles.organizer}>Hosted by {item.organizer}</Text>
       )}
       
       <View style={styles.tagsContainer}>
@@ -1016,7 +1017,7 @@ export default function App() {
             <Text style={styles.tagText}>{item.energy_level.toUpperCase()}</Text>
           </View>
         )}
-        {item.moods && item.moods.map((mood, index) => (
+        {moodTags.map((mood, index) => (
           <View key={index} style={styles.tag}>
             <Text style={styles.tagText}>{mood}</Text>
           </View>
@@ -1025,13 +1026,13 @@ export default function App() {
 
       {item.friends_attending && item.friends_attending.length > 0 && (
         <Text style={styles.friendsText}>
-          👥 {item.friends_attending.length} friends going: {item.friends_attending.join(', ')}
+          {item.friends_attending.length} friends going: {item.friends_attending.join(', ')}
         </Text>
       )}
 
       <View style={styles.attendanceRow}>
         <Text style={styles.attendanceText}>
-          👥 {(item.attendee_count || 0)} / {(item.capacity || 0)} attending
+          {(item.attendee_count || 0)} / {(item.capacity || 0)} attending
         </Text>
         <TouchableOpacity
           style={styles.inviteChip}
@@ -1185,7 +1186,6 @@ export default function App() {
         
         <View style={styles.controls}>
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchBar}
               placeholder="Search by name, location, organiser..."
@@ -1201,7 +1201,7 @@ export default function App() {
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.searchClearButton}>
-                <Text style={styles.searchClearText}>✕</Text>
+                <Text style={styles.searchClearText}>x</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1215,9 +1215,9 @@ export default function App() {
         {/* View mode segmented control */}
         <View style={styles.segmentedControl}>
           {[
-            { key: 'list', label: '☰  List' },
-            { key: 'map',  label: '🗺  Map'  },
-            { key: 'filter', label: `⚙  Filter${activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}` },
+            { key: 'list', label: 'List' },
+            { key: 'map',  label: 'Map'  },
+            { key: 'filter', label: `Filter${activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}` },
           ].map(({ key, label }) => (
             <TouchableOpacity
               key={key}
@@ -1259,13 +1259,13 @@ export default function App() {
                 style={[styles.scopeChip, dateSortOrder === 'asc' && styles.scopeChipActive]}
                 onPress={() => setDateSortOrder('asc')}
               >
-                <Text style={[styles.scopeChipText, dateSortOrder === 'asc' && styles.scopeChipTextActive]}>Oldest → Newest</Text>
+                <Text style={[styles.scopeChipText, dateSortOrder === 'asc' && styles.scopeChipTextActive]}>Oldest to Newest</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.scopeChip, dateSortOrder === 'desc' && styles.scopeChipActive]}
                 onPress={() => setDateSortOrder('desc')}
               >
-                <Text style={[styles.scopeChipText, dateSortOrder === 'desc' && styles.scopeChipTextActive]}>Newest → Oldest</Text>
+                <Text style={[styles.scopeChipText, dateSortOrder === 'desc' && styles.scopeChipTextActive]}>Newest to Oldest</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -1286,12 +1286,12 @@ export default function App() {
                 <Text style={styles.modalTitle}>{selectedEvent.title}</Text>
                 <Text style={styles.modalDate}>
                   {new Date(selectedEvent.start_time || selectedEvent.date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
-                  {' · '}
+                  {' | '}
                   {new Date(selectedEvent.start_time || selectedEvent.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
-                <Text style={styles.modalLocation}>📍 {selectedEvent.location}</Text>
+                <Text style={styles.modalLocation}>Location: {selectedEvent.location}</Text>
                 <Text style={styles.modalAttendeeCount}>
-                  👥 {(selectedEvent.attendee_count || 0)} / {(selectedEvent.capacity || 0)} attending
+                  {(selectedEvent.attendee_count || 0)} / {(selectedEvent.capacity || 0)} attending
                 </Text>
                 {selectedEvent.organizer && (
                   <Text style={styles.modalOrganizer}>Hosted by {selectedEvent.organizer}</Text>
@@ -1328,7 +1328,7 @@ export default function App() {
                 style={styles.modalCloseX}
                 onPress={() => setSelectedEvent(null)}
               >
-                <Text style={styles.modalCloseXText}>✕</Text>
+                <Text style={styles.modalCloseXText}>x</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1406,21 +1406,6 @@ export default function App() {
                 </View>
               </View>
 
-              <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Min Rating</Text>
-                <View style={styles.filterOptions}>
-                  {[4.0, 4.5].map(r => (
-                    <TouchableOpacity
-                      key={r}
-                      style={[styles.optionButton, minRating === r && styles.optionButtonActive]}
-                      onPress={() => setMinRating(minRating === r ? null : r)}
-                    >
-                      <Text style={[styles.optionText, minRating === r && styles.optionTextActive]}>{r}+</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
               <TouchableOpacity 
                 style={styles.closeButton}
                 onPress={() => setShowFilters(false)}
@@ -1475,7 +1460,6 @@ export default function App() {
         viewMode === 'list' ? (
           sortedScopedEvents.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>🔍</Text>
               <Text style={styles.emptyStateText}>
                 {eventScope === 'attended'
                   ? 'No past attended events found.'
@@ -1531,11 +1515,11 @@ export default function App() {
                             <Text style={styles.calloutTitle} numberOfLines={2}>{event.title}</Text>
                             <Text style={styles.calloutDate}>
                               {new Date(event.start_time || event.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                              {' · '}
+                              {' | '}
                               {new Date(event.start_time || event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </Text>
-                            <Text style={styles.calloutLocation} numberOfLines={1}>📍 {event.location}</Text>
-                            <Text style={styles.calloutTap}>Tap for details →</Text>
+                            <Text style={styles.calloutLocation} numberOfLines={1}>Location: {event.location}</Text>
+                            <Text style={styles.calloutTap}>Tap for details</Text>
                           </View>
                         </Callout>
                       </Marker>
@@ -1546,14 +1530,13 @@ export default function App() {
                 {sortedScopedEvents.filter(e => !e.latitude || !e.longitude).length > 0 && (
                   <View style={styles.mapFootnote}>
                     <Text style={styles.mapFootnoteText}>
-                      {sortedScopedEvents.filter(e => !e.latitude || !e.longitude).length} event(s) have no map location — switch to List view to see them all.
+                      {sortedScopedEvents.filter(e => !e.latitude || !e.longitude).length} event(s) have no map location - switch to List view to see them all.
                     </Text>
                   </View>
                 )}
               </>
             ) : (
               <View style={styles.mapUnavailable}>
-                <Text style={styles.emptyStateIcon}>🗺️</Text>
                 <Text style={styles.emptyStateText}>Map module not found in this iOS build.</Text>
                 <Text style={styles.emptyStateSubText}>Rebuild the app binary after installing dependencies.</Text>
               </View>
@@ -1631,21 +1614,6 @@ export default function App() {
               </View>
             </View>
 
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Min rating</Text>
-              <View style={styles.filterOptions}>
-                {[{ label: '4.0+', val: 4.0 }, { label: '4.5+', val: 4.5 }].map(({ label, val }) => (
-                  <TouchableOpacity
-                    key={val}
-                    style={[styles.optionButton, minRating === val && styles.optionButtonActive]}
-                    onPress={() => setMinRating(minRating === val ? null : val)}
-                  >
-                    <Text style={[styles.optionText, minRating === val && styles.optionTextActive]}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => setViewMode('list')}
@@ -1656,13 +1624,6 @@ export default function App() {
             </TouchableOpacity>
           </ScrollView>
         )
-      ) : currentTab === 'friends' ? (
-        <FlatList
-          data={friends}
-          renderItem={renderFriendItem}
-          keyExtractor={item => item.id.toString()}
-          contentContainerStyle={styles.list}
-        />
       ) : (
         renderProfile()
       )}
@@ -1673,12 +1634,6 @@ export default function App() {
           onPress={() => setCurrentTab('events')}
         >
           <Text style={[styles.tabText, currentTab === 'events' && styles.tabTextActive]}>Events</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tabItem, currentTab === 'friends' && styles.tabItemActive]}
-          onPress={() => setCurrentTab('friends')}
-        >
-          <Text style={[styles.tabText, currentTab === 'friends' && styles.tabTextActive]}>Friends</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.tabItem, currentTab === 'profile' && styles.tabItemActive]}
@@ -1812,11 +1767,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e5e5',
     paddingHorizontal: 10,
-  },
-  searchIcon: {
-    fontSize: 14,
-    marginRight: 6,
-    color: '#999',
   },
   searchBar: {
     flex: 1,
@@ -2124,49 +2074,6 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#ea580c',
-  },
-  friendCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  friendAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 16,
-  },
-  friendInfo: {
-    flex: 1,
-  },
-  friendName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  friendStatus: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  messageButton: {
-    backgroundColor: '#f3e8ff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  messageButtonText: {
-    color: '#ea580c',
-    fontWeight: '600',
-    fontSize: 12,
   },
   profileContainer: {
     padding: 20,
@@ -2493,10 +2400,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 40,
   },
-  emptyStateIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
   emptyStateText: {
     fontSize: 16,
     color: '#666',
@@ -2572,31 +2475,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
   },
-  // ── Follow chip on event card ──────────────────────────────────────────────
-  organizerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  followChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#ea580c',
-  },
-  followChipActive: {
-    backgroundColor: '#ea580c',
-  },
-  followChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ea580c',
-  },
-  followChipTextActive: {
-    color: '#fff',
-  },
   // ── Profile stats row ──────────────────────────────────────────────────────
   statsRow: {
     flexDirection: 'row',
@@ -2625,92 +2503,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: '#eee',
-  },
-  // ── Profile sub-tabs ───────────────────────────────────────────────────────
-  profileTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 10,
-    padding: 3,
-    marginBottom: 16,
-  },
-  profileTabBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  profileTabBtnActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  profileTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#888',
-  },
-  profileTabTextActive: {
-    color: '#ea580c',
-  },
-  // ── Society card (following list) ─────────────────────────────────────────
-  societyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  societyAvatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    marginRight: 12,
-  },
-  societyInfo: {
-    flex: 1,
-  },
-  societyName: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  societyDesc: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
-  },
-  societyEvents: {
-    fontSize: 12,
-    color: '#ea580c',
-    fontWeight: '600',
-    marginTop: 3,
-  },
-  unfollowButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#ccc',
-  },
-  unfollowButtonText: {
-    fontSize: 12,
-    color: '#888',
-    fontWeight: '600',
   },
   emptyStateSubText: {
     fontSize: 13,

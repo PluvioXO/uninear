@@ -51,7 +51,7 @@ def test_get_events():
     mock_response.data = [
         {"id": 1, "title": "Mock Event", "description": "Test", "location": "Hall",
          "start_time": "2026-04-01T10:00:00+00:00", "capacity": 50, "attendee_count": 10,
-         "status": "Published", "organizer": "Org"}
+         "status": "Published", "organizer": "Org", "mood_tags": ["Social"], "energy_level": "High"}
     ]
 
     # Chain: table().select().eq().gte().order().execute()
@@ -63,6 +63,8 @@ def test_get_events():
         assert response.status_code == 200
         assert isinstance(response.json(), list)
         assert response.json()[0]["title"] == "Mock Event"
+        assert response.json()[0]["mood_tags"] == ["Social"]
+        assert response.json()[0]["energy_level"] == "High"
 
 # --- FR-01: Event List Display Tests ---
 
@@ -123,6 +125,9 @@ def test_FR01_display_events_calls_correct_filters():
 
         # Verify table and select were called
         mock_table.assert_called_with("events")
+        select_args = mock_table.return_value.select.call_args[0][0]
+        assert "mood_tags" in select_args
+        assert "energy_level" in select_args
         # Verify filter chain: .eq("status", "Published").gte("start_time", ...).order("start_time")
         chain.eq.assert_called_once_with("status", "Published")
         chain.eq.return_value.gte.assert_called_once()

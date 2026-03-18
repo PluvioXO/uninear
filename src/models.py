@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from datetime import datetime
 
@@ -13,7 +13,7 @@ class EventCreateSchema(BaseModel):
     
     # Legacy/Optional fields
     end_time: Optional[datetime] = None
-    mood_tags: List[str] = []
+    mood_tags: List[str] = Field(default_factory=list)
     energy_level: Optional[str] = None
     organiser_id: Optional[str] = None
     latitude: Optional[float] = None
@@ -87,6 +87,8 @@ class EventResponseSchema(BaseModel):
     attendee_count: int
     status: str = "Published"
     organizer: Optional[str] = None
+    mood_tags: List[str] = Field(default_factory=list)
+    energy_level: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 

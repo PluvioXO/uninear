@@ -32,13 +32,25 @@ describe('App', () => {
           json: () => Promise.resolve([
             {
               id: 1,
-              title: 'Test Event',
+              title: 'Social Event',
               start_time: '2026-10-15T09:00:00Z',
               location: 'Test Location',
               status: 'Published',
               latitude: 0,
               longitude: 0,
-              moods: [],
+              mood_tags: ['Social'],
+              energy_level: 'High',
+              friends_attending: [],
+            },
+            {
+              id: 2,
+              title: 'Focused Event',
+              start_time: '2026-10-16T09:00:00Z',
+              location: 'Library',
+              status: 'Published',
+              latitude: 0,
+              longitude: 0,
+              mood_tags: ['Focused'],
               energy_level: 'medium',
               friends_attending: [],
             },
@@ -69,8 +81,28 @@ describe('App', () => {
     fireEvent.changeText(screen.getByPlaceholderText('Minimum 8 characters'), 'password123');
     fireEvent.press(screen.getByText('Log In'));
 
-    expect(await screen.findByText('Test Event', {}, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByText('Social Event', {}, { timeout: 10000 })).toBeTruthy();
     
     expect(screen.getByText('Welcome back,')).toBeTruthy();
+  });
+
+  it('filters events using backend mood_tags values', async () => {
+    render(<App />);
+
+    fireEvent.changeText(screen.getByPlaceholderText('you@bath.ac.uk'), 'test@bath.ac.uk');
+    fireEvent.changeText(screen.getByPlaceholderText('Minimum 8 characters'), 'password123');
+    fireEvent.press(screen.getByText('Log In'));
+
+    expect(await screen.findByText('Social Event', {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.getByText('Focused Event')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('Filter'));
+    fireEvent.press(screen.getByText('Social'));
+
+    expect(screen.getByText('Show 1 event')).toBeTruthy();
+    fireEvent.press(screen.getByText('Show 1 event'));
+
+    expect(await screen.findByText('Social Event')).toBeTruthy();
+    expect(screen.queryByText('Focused Event')).toBeNull();
   });
 });

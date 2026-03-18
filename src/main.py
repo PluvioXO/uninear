@@ -148,7 +148,7 @@ class UniNearBackend:
             response = (
                 self.db.client
                 .table("events")
-                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, latitude, longitude")
+                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, mood_tags, energy_level, latitude, longitude")
                 .eq("status", "Published")
                 .gte("start_time", now.isoformat())
                 .order("start_time")
@@ -417,7 +417,7 @@ class UniNearBackend:
             db = self.db.admin or self.db.client
             response = (
                 db.table("events")
-                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, latitude, longitude")
+                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, mood_tags, energy_level, latitude, longitude")
                 .eq("organiser_id", user["user_id"])
                 .execute()
             )
