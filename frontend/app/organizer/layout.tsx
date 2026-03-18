@@ -1,11 +1,25 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRequireAuth } from '@/lib/useRequireAuth';
+import { getSupabase } from '@/lib/supabase';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
 
 export default function OrganizerLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useRequireAuth();
+  const [societyName, setSocietyName] = useState<string | null>(null);
+  const [fullName, setFullName] = useState<string | null>(null);
+
+  useEffect(() => {
+    getSupabase().auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        const meta = data.session.user.user_metadata;
+        setSocietyName(meta?.society_name || null);
+        setFullName(meta?.full_name || null);
+      }
+    });
+  }, []);
 
   if (loading) {
     return (
@@ -24,8 +38,6 @@ export default function OrganizerLayout({ children }: { children: React.ReactNod
             <Link href="/" className="text-2xl font-bold tracking-tighter text-orange-600">UNINEAR</Link>
             <div className="hidden md:flex space-x-6 text-sm font-medium">
               <Link href="/organizer/events" className="text-gray-500 hover:text-gray-900 transition-colors">Events</Link>
-              <Link href="/organizer/members" className="text-gray-500 hover:text-gray-900 transition-colors">Members</Link>
-              <Link href="/organizer/analytics" className="text-gray-500 hover:text-gray-900 transition-colors">Analytics</Link>
               <Link href="/organizer/settings" className="text-gray-500 hover:text-gray-900 transition-colors">Settings</Link>
             </div>
           </div>
@@ -38,8 +50,8 @@ export default function OrganizerLayout({ children }: { children: React.ReactNod
               type="button"
             />
             <div className="hidden md:block text-right">
-              <p className="text-sm font-medium text-gray-900">PLACEHOLDER SOCIETY</p>
-              <p className="text-xs text-gray-500">PLACEHOLDER ROLE</p>
+              <p className="text-sm font-medium text-gray-900">{societyName || fullName || 'Organiser'}</p>
+              <p className="text-xs text-gray-500">Organiser</p>
             </div>
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 border border-gray-200" />
           </div>

@@ -91,8 +91,9 @@ export async function apiFetch(
     throw new Error('Not authenticated — no session token available');
   }
 
+  const isFormData = options.body instanceof FormData;
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...options.headers,
     Authorization: `Bearer ${token}`,
   };
@@ -198,6 +199,51 @@ export async function cancelRsvp(eventId: number, userId: string): Promise<Respo
     method: 'DELETE',
     body: JSON.stringify({ event_id: eventId, user_id: userId }),
   });
+}
+
+export interface UserProfile {
+  email: string;
+  full_name: string;
+  bio: string;
+  location: string;
+  interests: string[];
+  society_name: string;
+  society_description: string;
+  contact_email: string;
+  website: string;
+  notification_prefs: Record<string, boolean>;
+}
+
+export async function getProfile(): Promise<UserProfile> {
+  const res = await apiFetch('/auth/profile');
+  if (!res.ok) {
+    throw new Error('Failed to fetch profile');
+  }
+  return res.json();
+}
+
+export async function updateProfile(data: Partial<UserProfile>): Promise<Response> {
+  return apiFetch('/auth/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface ActivityItem {
+  user: string;
+  action: string;
+  target: string;
+  time: string;
+}
+
+export async function fetchRecentActivity(limit = 8): Promise<ActivityItem[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/activity?limit=${limit}`);
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
 }
 
 export async function createEvent(data: {

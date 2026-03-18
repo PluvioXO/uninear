@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, Optional, cast
 
-from fastapi import FastAPI, HTTPException, Response, Query, Depends, Request
+from fastapi import FastAPI, HTTPException, Response, Query, Depends, Request, UploadFile, File as FastAPIFile
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.database import Database
 
 # --- MODELS ---
-from src.models import EventCreateSchema, EventUpdateSchema, EventResponseSchema, UserSignupSchema, UserLoginSchema, UserForgotPasswordSchema, EventAttendanceSchema
+from src.models import EventCreateSchema, EventUpdateSchema, EventResponseSchema, UserSignupSchema, UserLoginSchema, UserForgotPasswordSchema, EventAttendanceSchema, UserProfileUpdateSchema
 
 
 # --- AUTH DEPENDENCY ---
@@ -119,9 +119,13 @@ class UniNearBackend:
         self.app.post("/auth/login")(self.login)
         self.app.post("/auth/forgot-password")(self.forgot_password)
         self.app.get("/events", response_model=list[EventResponseSchema])(self.get_events)
+        self.app.get("/api/activity")(self.get_recent_activity)
 
         # Protected endpoints (require valid JWT)
         auth = [Depends(verify_token)]
+        self.app.get("/auth/profile", dependencies=auth)(self.get_profile)
+        self.app.patch("/auth/profile", dependencies=auth)(self.update_profile)
+        self.app.post("/auth/avatar", dependencies=auth)(self.upload_avatar)
         self.app.delete("/auth/account", dependencies=auth)(self.delete_account)
         self.app.post("/events", dependencies=auth)(self.create_event)
         self.app.delete("/events/{event_id}", dependencies=auth)(self.delete_event)
@@ -194,6 +198,100 @@ class UniNearBackend:
         except Exception as e:
             logging.error(f"Database error fetching events: {e}")
             raise HTTPException(status_code=503, detail="Unable to load events")
+
+    def get_recent_activity(self, limit: int = Query(8, ge=1, le=20)) -> list[Dict[str, Any]]:
+        """GET /api/activity — Return recent platform activity derived from RSVPs and events."""
+        try:
+            db = self.db.admin or self.db.client
+            now = datetime.now(timezone.utc)
+            activities: list[Dict[str, Any]] = []
+
+            # Recent RSVPs (last 7 days)
+            week_ago = (now - timedelta(days=7)).isoformat()
+            rsvp_response = (
+                db.table("event_attendance")
+                .select("user_id, event_id, created_at")
+                .gte("created_at", week_ago)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            rsvp_rows = cast(list[Dict[str, Any]], rsvp_response.data or [])
+
+            # Gather event details for RSVP activities
+            if rsvp_rows:
+                event_ids = list({r["event_id"] for r in rsvp_rows})
+                events_resp = db.table("events").select("id, title, organizer").in_("id", event_ids).execute()
+                events_map = {e["id"]: e for e in (events_resp.data or [])}
+
+                # Gather user names
+                user_ids = list({r["user_id"] for r in rsvp_rows})
+                user_names: Dict[str, str] = {}
+                if self.db.admin:
+                    for uid in user_ids:
+                        try:
+                            u = self.db.admin.auth.admin.get_user_by_id(uid)
+                            if u and u.user:
+                                name = (u.user.user_metadata or {}).get("full_name")
+                                if name:
+                                    # Use first name + last initial for privacy
+                                    parts = name.split()
+                                    user_names[uid] = f"{parts[0]} {parts[-1][0]}." if len(parts) > 1 else parts[0]
+                        except Exception:
+                            pass
+
+                for row in rsvp_rows:
+                    event_info = events_map.get(row["event_id"], {})
+                    user_display = user_names.get(row["user_id"], "A student")
+                    activities.append({
+                        "user": user_display,
+                        "action": "registered for",
+                        "target": event_info.get("title", "an event"),
+                        "time": row["created_at"],
+                    })
+
+            # Recently published events (last 7 days)
+            events_response = (
+                db.table("events")
+                .select("title, organizer, created_at, status")
+                .eq("status", "Published")
+                .gte("created_at", week_ago)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            for event in (events_response.data or []):
+                activities.append({
+                    "user": event.get("organizer") or "An organiser",
+                    "action": "published event",
+                    "target": event.get("title", ""),
+                    "time": event.get("created_at"),
+                })
+
+            # Sort all by time descending and apply limit
+            activities.sort(key=lambda a: a.get("time") or "", reverse=True)
+            activities = activities[:limit]
+
+            # Convert timestamps to relative time strings
+            for a in activities:
+                try:
+                    ts = datetime.fromisoformat(a["time"].replace("Z", "+00:00"))
+                    diff = now - ts
+                    if diff.total_seconds() < 60:
+                        a["time"] = "just now"
+                    elif diff.total_seconds() < 3600:
+                        a["time"] = f"{int(diff.total_seconds() // 60)}m ago"
+                    elif diff.total_seconds() < 86400:
+                        a["time"] = f"{int(diff.total_seconds() // 3600)}h ago"
+                    else:
+                        a["time"] = f"{diff.days}d ago"
+                except Exception:
+                    a["time"] = ""
+
+            return activities
+        except Exception as e:
+            logging.error(f"Error fetching activity: {e}")
+            return []
 
     def create_event(self, event: EventCreateSchema, user: Dict[str, Any] = Depends(verify_token)):
         try:
@@ -484,6 +582,93 @@ class UniNearBackend:
             else:
                 raise RuntimeError("Password reset is not supported by current auth client")
             return {"message": "If that account exists, a password reset email has been sent."}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def get_profile(self, user: Dict[str, Any] = Depends(verify_token)):
+        """GET /auth/profile — Return the authenticated user's profile from user_metadata."""
+        try:
+            db = self.db.admin
+            if not db:
+                raise HTTPException(status_code=503, detail="Profile service unavailable")
+            user_data = db.auth.admin.get_user_by_id(user["user_id"])
+            if not user_data or not user_data.user:
+                raise HTTPException(status_code=404, detail="User not found")
+            metadata = user_data.user.user_metadata or {}
+            return {
+                "email": user_data.user.email,
+                "full_name": metadata.get("full_name", ""),
+                "bio": metadata.get("bio", ""),
+                "location": metadata.get("location", ""),
+                "interests": metadata.get("interests", []),
+                "avatar_url": metadata.get("avatar_url", ""),
+                "society_name": metadata.get("society_name", ""),
+                "society_description": metadata.get("society_description", ""),
+                "contact_email": metadata.get("contact_email", ""),
+                "website": metadata.get("website", ""),
+                "notification_prefs": metadata.get("notification_prefs", {}),
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    def update_profile(self, profile: UserProfileUpdateSchema, user: Dict[str, Any] = Depends(verify_token)):
+        """PATCH /auth/profile — Update the authenticated user's profile in user_metadata."""
+        try:
+            db = self.db.admin
+            if not db:
+                raise HTTPException(status_code=503, detail="Profile service unavailable")
+            update_data = profile.model_dump(exclude_unset=True)
+            # Merge with existing metadata to preserve fields not being updated
+            user_data = db.auth.admin.get_user_by_id(user["user_id"])
+            existing_metadata = {}
+            if user_data and user_data.user:
+                existing_metadata = user_data.user.user_metadata or {}
+            merged = {**existing_metadata, **update_data}
+            db.auth.admin.update_user_by_id(user["user_id"], {"user_metadata": merged})
+            return {"message": "Profile updated successfully"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    async def upload_avatar(self, file: UploadFile = FastAPIFile(...), user: Dict[str, Any] = Depends(verify_token)):
+        """POST /auth/avatar — Upload an avatar image to Supabase Storage."""
+        try:
+            db = self.db.admin
+            if not db:
+                raise HTTPException(status_code=503, detail="Upload service unavailable")
+
+            if not file.content_type or not file.content_type.startswith("image/"):
+                raise HTTPException(status_code=400, detail="File must be an image")
+
+            contents = await file.read()
+            if len(contents) > 1_048_576:
+                raise HTTPException(status_code=400, detail="File must be under 1 MB")
+
+            ext = (file.filename or "avatar.png").rsplit(".", 1)[-1] or "png"
+            path = f"{user['user_id']}/avatar.{ext}"
+
+            db.storage.from_("avatars").upload(
+                path, contents,
+                file_options={"content-type": file.content_type, "upsert": "true"},
+            )
+
+            url_data = db.storage.from_("avatars").get_public_url(path)
+            avatar_url = f"{url_data}?t={int(datetime.now(timezone.utc).timestamp())}"
+
+            # Save URL to user metadata
+            user_data = db.auth.admin.get_user_by_id(user["user_id"])
+            existing_metadata = {}
+            if user_data and user_data.user:
+                existing_metadata = user_data.user.user_metadata or {}
+            existing_metadata["avatar_url"] = avatar_url
+            db.auth.admin.update_user_by_id(user["user_id"], {"user_metadata": existing_metadata})
+
+            return {"avatar_url": avatar_url}
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 

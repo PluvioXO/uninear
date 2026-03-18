@@ -77,7 +77,7 @@ const ScrollReveal: React.FC<ScrollRevealProps> = ({
 
   return (
     <div ref={containerRef} className={`overflow-hidden ${containerClassName}`}>
-      <p className={`flex flex-wrap gap-2 text-balance ${textClassName}`}>{splitText}</p>
+      <p className={`${textClassName}`}>{splitText}</p>
     </div>
   );
 };

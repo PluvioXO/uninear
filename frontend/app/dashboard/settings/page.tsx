@@ -1,12 +1,110 @@
 'use client';
 
-import React, { useState } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useRef } from 'react';
 import MagneticButton from '@/components/MagneticButton';
+import { getProfile, updateProfile } from '@/lib/api';
+import { uploadAvatar } from '@/lib/avatar';
 import { logout } from '@/lib/auth';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('account');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  // Account fields
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Notification prefs
+  const [notifPrefs, setNotifPrefs] = useState({
+    new_events: true,
+    weekly_digest: true,
+    system_updates: true,
+  });
+
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        setFullName(profile.full_name || '');
+        setEmail(profile.email || '');
+        setBio(profile.bio || '');
+        setAvatarUrl((profile as any).avatar_url || null);
+        const prefs = profile.notification_prefs || {};
+        setNotifPrefs({
+          new_events: prefs.new_events ?? true,
+          weekly_digest: prefs.weekly_digest ?? true,
+          system_updates: prefs.system_updates ?? true,
+        });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const showSaved = (msg: string) => {
+    setSaveMessage(msg);
+    setTimeout(() => setSaveMessage(''), 2000);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadAvatar(file);
+      setAvatarUrl(url);
+      await updateProfile({ avatar_url: url } as any);
+      showSaved('Photo updated.');
+    } catch (err: any) {
+      showSaved(err.message || 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      const res = await updateProfile({ full_name: fullName, bio });
+      if (!res.ok) throw new Error();
+      showSaved('Profile saved.');
+    } catch {
+      showSaved('Failed to save.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    setSaving(true);
+    try {
+      const res = await updateProfile({ notification_prefs: notifPrefs } as any);
+      if (!res.ok) throw new Error();
+      showSaved('Preferences saved.');
+    } catch {
+      showSaved('Failed to save.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const notifItems = [
+    { key: 'new_events' as const, title: 'New Events', desc: 'Get notified when a new event is created by an organiser you follow.' },
+    { key: 'weekly_digest' as const, title: 'Weekly Digest', desc: 'A summary of your activity every Monday.' },
+    { key: 'system_updates' as const, title: 'System Updates', desc: 'Important updates about the Uninear platform.' },
+  ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden">
@@ -15,6 +113,12 @@ export default function SettingsPage() {
           <h1 className="text-3xl md:text-4xl font-bold mb-2">Settings</h1>
           <p className="text-gray-400">Manage your account and preferences.</p>
         </div>
+
+        {saveMessage && (
+          <div className="mb-4 px-4 py-2 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium w-fit">
+            {saveMessage}
+          </div>
+        )}
 
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar Tabs */}
@@ -50,7 +154,7 @@ export default function SettingsPage() {
 
           {/* Content Area */}
           <div className="flex-1 space-y-6">
-            
+
             {activeTab === 'account' && (
               <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm space-y-8">
                 <div>
@@ -59,12 +163,28 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex items-center gap-6">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 border-4 border-white shadow-md flex items-center justify-center text-3xl">
-                    TS
+                  <div className="relative group">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="Avatar" className="w-24 h-24 rounded-full border-4 border-white shadow-md object-cover" />
+                    ) : (
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 border-4 border-white shadow-md flex items-center justify-center text-3xl">
+                        {fullName ? fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : '?'}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                        {uploading ? 'Uploading...' : 'Change'}
+                      </span>
+                    </button>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
                   </div>
                   <div>
-                    <button className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors mb-2">Change Display Picture</button>
-                    <p className="text-xs text-gray-400">JPG, GIF or PNG. 1MB max.</p>
+                    <p className="text-sm font-medium text-gray-700">Profile Picture</p>
+                    <p className="text-xs text-gray-400">Click to upload. JPG, PNG or GIF. 1MB max.</p>
                   </div>
                 </div>
 
@@ -72,25 +192,26 @@ export default function SettingsPage() {
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
-                      <input type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:border-orange-500" defaultValue="PLACEHOLDER STATIC NAME" />
+                      <input type="text" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:border-orange-500" value={fullName} onChange={(e) => setFullName(e.target.value)} />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                      <input type="email" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:border-orange-500" defaultValue="PLACEHOLDER STATIC EMAIL" />
+                      <input type="email" className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-gray-400" value={email} disabled />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">About You</label>
-                    <textarea rows={4} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:border-orange-500" defaultValue="PLACEHOLDER STATIC DESCRIPTION" />
+                    <textarea rows={4} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:border-orange-500" value={bio} onChange={(e) => setBio(e.target.value)} />
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-gray-100 flex justify-end">
                    <MagneticButton
-                    label="Save Changes"
+                    label={saving ? "Saving..." : "Save Changes"}
                     className="bg-orange-600 text-white"
                     accentClassName="from-orange-400 via-amber-400 to-yellow-400"
                     type="button"
+                    onClick={handleSaveProfile}
                   />
                 </div>
               </div>
@@ -102,27 +223,34 @@ export default function SettingsPage() {
                   <h2 className="text-xl font-bold text-gray-900 mb-1">Notification Preferences</h2>
                   <p className="text-sm text-gray-500">Manage how you receive updates.</p>
                 </div>
-                
+
                 <div className="space-y-6">
-                  {[
-                    { title: 'New Events', desc: 'Get notified when a new event is created by an organiser you follow.', checked: true },
-                    { title: 'Weekly Digest', desc: 'A summary of your activity every Monday.', checked: true },
-                    { title: 'System Updates', desc: 'Important updates about the Uninear platform.', checked: true },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start justify-between">
+                  {notifItems.map((item) => (
+                    <div key={item.key} className="flex items-start justify-between">
                       <div>
                         <h3 className="text-sm font-medium text-gray-900">{item.title}</h3>
                         <p className="text-sm text-gray-500">{item.desc}</p>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked={item.checked} />
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={notifPrefs[item.key]}
+                          onChange={(e) => setNotifPrefs(prev => ({ ...prev, [item.key]: e.target.checked }))}
+                        />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
                       </label>
                     </div>
                   ))}
                 </div>
                  <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button className="px-6 py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors">Save Preferences</button>
+                  <button
+                    onClick={handleSaveNotifications}
+                    disabled={saving}
+                    className="px-6 py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Saving...' : 'Save Preferences'}
+                  </button>
                 </div>
               </div>
             )}

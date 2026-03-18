@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { fetchOrganizerEvents, updateEvent, deleteEvent, fetchEventRsvps } from '@/lib/api';
+import { fetchOrganizerEvents, updateEvent, deleteEvent, fetchEventRsvps, fetchRecentActivity, type ActivityItem } from '@/lib/api';
 import RSVPList, { type RSVPAttendee } from '@/components/RSVPList';
 
 interface OrganizerEvent {
@@ -28,6 +28,7 @@ export default function OrganizerEventPage() {
   const [rsvpAttendees, setRsvpAttendees] = useState<RSVPAttendee[]>([]);
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [rsvpError, setRsvpError] = useState<string | null>(null);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
 
   const loadEvents = useCallback(async () => {
     try {
@@ -48,6 +49,7 @@ export default function OrganizerEventPage() {
 
   useEffect(() => {
     loadEvents();
+    fetchRecentActivity().then(setActivity);
   }, [loadEvents]);
 
   async function handlePublish(eventId: number) {
@@ -265,17 +267,14 @@ export default function OrganizerEventPage() {
               Recent Activity
             </h2>
             <div className="border border-gray-200 rounded-2xl bg-white shadow-sm p-1">
-              {[
-                { user: 'Sarah M.', action: 'registered for', target: 'Tech Hackathon', time: '2m ago' },
-                { user: 'James L.', action: 'joined the society', target: '', time: '15m ago' },
-                { user: 'Admin', action: 'updated event details', target: 'Panel Night', time: '1h ago' },
-                { user: 'Alex K.', action: 'commented on', target: 'Freshers Mixer', time: '3h ago' }
-              ].map((activity, i) => (
+              {activity.length === 0 ? (
+                <div className="p-3 text-sm text-gray-400">No recent activity</div>
+              ) : activity.map((item, i) => (
                 <div key={i} className="p-3 hover:bg-gray-50 rounded-xl transition-colors border-b last:border-0 border-gray-100">
                   <p className="text-sm text-gray-600">
-                    <span className="font-bold text-gray-900">{activity.user}</span> {activity.action} {activity.target && <span className="text-orange-600 font-medium">{activity.target}</span>}
+                    <span className="font-bold text-gray-900">{item.user}</span> {item.action} {item.target && <span className="text-orange-600 font-medium">{item.target}</span>}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
+                  <p className="text-xs text-gray-400 mt-1">{item.time}</p>
                 </div>
               ))}
             </div>

@@ -1,122 +1,122 @@
-# Uninear
+# UniNear
 
-**Uninear** is a comprehensive community event management platform designed to foster engagement and social connection. It provides organizers with powerful tools to create, manage, and analyze events based on mood, energy, and attendance trends, moving beyond simple ticketing to true community building.
+**UniNear** is a university event discovery platform that helps students find and attend campus events, and gives society organisers the tools to create, publish, and manage events with real-time RSVP tracking. Built as part of CM22007 Software Engineering at the University of Bath.
 
 ## Project Overview
 
-This repository is a **monorepo** containing the three core components of the Uninear ecosystem:
+This is a **monorepo** containing three applications:
 
-1.  **Web Dashboard (`/frontend`)**: A Next.js application for event organizers to create events, view analytics, and manage their community.
-2.  **Mobile App (`/mobile`)**: A React Native (Expo) application for attendees to discover events, view details, and check in.
-3.  **Backend API (`/src`)**: A robust FastAPI (Python) service that powers data persistence, authentication, and business logic.
-
----
+1. **Web Dashboard (`/frontend`)** — Next.js app for both attendees (event discovery, RSVP, map view) and organisers (event creation, RSVP management, settings).
+2. **Mobile App (`/mobile`)** — React Native (Expo) app for on-the-go event discovery with map view, filtering, and RSVP.
+3. **Backend API (`/src`)** — FastAPI service handling authentication, event CRUD, RSVP management, and user profiles.
 
 ## Tech Stack
 
-### **Frontend (Web Dashboard)**
--   **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
--   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
--   **Language**: TypeScript
--   **Visuals**: React Three Fiber / Drei (3D Elements), Framer Motion
--   **Key Features**:
-    -   Historical Attendance Analytics
-    -   Event Creation with Mood & Energy tagging
-    -   Interactive Landing Page
-
-### **Mobile (Attendee App)**
--   **Framework**: [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/)
--   **Maps**: Google Maps Integration
--   **Language**: TypeScript / JavaScript
-
-### **Backend (API)**
--   **Framework**: [FastAPI](https://fastapi.tiangolo.com/)
--   **Language**: Python 3.x
--   **Database**: SQLite (Development) / PostgreSQL (Production ready)
--   **Testing**: Pytest
-
----
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Web Frontend | Next.js 15, TypeScript, Tailwind CSS | Attendee + organiser dashboard |
+| Mobile | React Native, Expo | Cross-platform attendee app |
+| Backend | FastAPI, Python | REST API, business logic |
+| Database | Supabase (PostgreSQL) | Data persistence, Row-Level Security |
+| Auth | Supabase Auth (JWT) | @bath.ac.uk email validation, sessions |
+| Storage | Supabase Storage | Avatar/logo uploads |
+| Maps | Leaflet (web), Google Maps (mobile) | Event location display + selection |
+| CI/CD | GitHub Actions | Automated testing, CodeQL analysis |
 
 ## Getting Started
 
 ### Prerequisites
--   **Node.js** (v18+ recommended)
--   **Python** (v3.9+)
--   **npm** or **yarn**
+- **Node.js** v18+
+- **Python** 3.9+
+- A **Supabase** project with the required tables (see `supabase/schema.sql`)
 
-### 1. Backend Setup
-The backend serves as the foundation for both the web and mobile apps.
+### 1. Backend
 
 ```bash
-# Create a virtual environment
-python3 -m venv venv
-
-# Activate the virtual environment
-# On macOS/Linux:
-source venv/bin/activate
-# On Windows:
-# .\venv\Scripts\activate
-
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the server
-python run.py
-```
-*The API will be available at `http://localhost:8000`*
+# Set environment variables (copy .env.example or create .env)
+# Required: SUPABASE_URL, SUPABASE_KEY, SUPABASE_SERVICE_ROLE_KEY
 
-### 2. Frontend (Web) Setup
-The organizer dashboard.
+# Run the server
+uvicorn src.main:app --host 127.0.0.1 --port 8000
+```
+
+The API will be available at `http://localhost:8000`.
+
+### 2. Web Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
 
-# Run the development server
+# Set environment variables in .env.local
+# Required: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
+
 npm run dev
 ```
-*The web app will be available at `http://localhost:3000`*
 
-### 3. Mobile Setup
-The attendee experience.
+The web app will be available at `http://localhost:3000`.
+
+### 3. Mobile App
 
 ```bash
 cd mobile
-
-# Install dependencies
 npm install
-
-# Start the Expo server
 npx expo start
 ```
-*Scan the QR code with the Expo Go app on your phone.*
 
----
+Scan the QR code with Expo Go on your phone.
 
-## Key Features
+## Features
 
-### For Organizers (Web)
--   **Event Creation**: Detailed event setup including location, time, and specific "Mood" and "Energy" tags to set expectations.
--   **Analytics Dashboard**: Visualize historical attendance trends to understand community growth.
--   **Community Focus**: Tools designed for engagement rather than just transaction/sales.
+### For Attendees
+- **Event Discovery** — browse upcoming events in list or interactive map view
+- **Filtering** — filter by time window (next 2 hours, today, this week), distance radius, and keyword search
+- **RSVP** — register for events with real-time capacity tracking, cancel anytime
+- **My RSVPs** — view all events you've registered for in one place
+- **Profile Settings** — update your name, bio, avatar, and notification preferences
 
-### For Attendees (Mobile)
--   **Discovery**: Find events based on location and vibe.
--   **Real-time Updates**: Get the latest information on event status.
+### For Organisers
+- **Event Creation** — create events with title, location (map picker), capacity, date/time, mood tags, and energy level
+- **Publish/Draft** — save events as drafts and publish when ready
+- **RSVP Management** — view attendee lists with names and emails for your events
+- **Society Settings** — manage society name, description, contact details, and logo
+- **Real-time Activity** — see recent RSVPs and event activity on your dashboard
 
----
+## API Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/events` | No | List published events (with filtering) |
+| POST | `/events` | Yes | Create event |
+| PATCH | `/events/{id}` | Yes | Update event (owner only) |
+| DELETE | `/events/{id}` | Yes | Delete event |
+| POST | `/api/rsvp` | Yes | RSVP to an event |
+| GET | `/api/rsvp` | Yes | Get user's RSVPs |
+| DELETE | `/events/{id}/rsvp` | Yes | Cancel RSVP |
+| GET | `/api/organizer/events` | Yes | Get organiser's events |
+| GET | `/api/events/{id}/rsvps` | Yes | Get attendee list (owner only) |
+| GET | `/api/activity` | No | Recent platform activity |
+| GET | `/auth/profile` | Yes | Get user profile |
+| PATCH | `/auth/profile` | Yes | Update user profile |
+| POST | `/auth/avatar` | Yes | Upload avatar image |
+| POST | `/auth/signup` | No | Register (@bath.ac.uk only) |
+| POST | `/auth/login` | No | Sign in |
+| POST | `/auth/forgot-password` | No | Request password reset |
+| DELETE | `/auth/account` | Yes | Delete account |
 
 ## Testing
 
-To run the backend test suite:
-
 ```bash
-# Ensure venv is active
-pytest
+# Backend tests (83 tests)
+python -m pytest tests/ -q
+
+# Frontend tests
+cd frontend && npx jest
 ```
 
-## License
+## Team
 
-This project is proprietary software. All rights reserved.
+University of Bath — CM22007 Software Engineering, 2025-26

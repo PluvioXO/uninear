@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { getSupabase } from '@/lib/supabase';
 import ReflectiveCard from '@/components/ReflectiveCard';
 import ScrollFloat from '@/components/ScrollFloat';
 import RotatingText from '@/components/RotatingText';
@@ -11,6 +13,14 @@ import SpotlightCard from '@/components/SpotlightCard';
 
 export default function Home() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    getSupabase().auth.getSession().then(({ data }) => {
+      if (data.session) setIsLoggedIn(true);
+    });
+  }, []);
 
   return (
     <div ref={scrollContainerRef} className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden">
@@ -19,12 +29,14 @@ export default function Home() {
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
           <div className="text-2xl font-bold tracking-tighter text-orange-600">UNINEAR</div>
           <div className="hidden md:flex space-x-8">
-            <Link href="#" className="hover:text-orange-600 transition-colors">Events</Link>
-            <Link href="#" className="hover:text-orange-600 transition-colors">Societies</Link>
-            <Link href="#" className="hover:text-orange-600 transition-colors">About</Link>
+            <Link href="/dashboard/discovery" className="hover:text-orange-600 transition-colors">Events</Link>
+            <a href="#about" className="hover:text-orange-600 transition-colors">About</a>
           </div>
-          <Link href="/login" className="bg-gray-900 text-white px-6 py-2 rounded-full font-medium hover:bg-orange-600 hover:text-white transition-colors">
-            Sign In
+          <Link
+            href={isLoggedIn ? "/dashboard/discovery" : "/login"}
+            className="bg-gray-900 text-white px-6 py-2 rounded-full font-medium hover:bg-orange-600 hover:text-white transition-colors"
+          >
+            {isLoggedIn ? "Dashboard" : "Sign In"}
           </Link>
         </div>
       </nav>
@@ -35,8 +47,8 @@ export default function Home() {
         {/* Disabled dark beams for light mode cleanness */}
         
         <div className="relative z-10 max-w-5xl mx-auto">
-          <ScrollFloat 
-            animationDuration={1} 
+          <ScrollFloat
+            animationDuration={1}
             ease="back.inOut(2)"
             scrollStart="center bottom+=50%"
             scrollEnd="bottom bottom-=40%"
@@ -44,13 +56,12 @@ export default function Home() {
             containerClassName="text-6xl md:text-8xl font-bold tracking-tighter mb-6 text-gray-900"
             textClassName=""
           >
-            Societies Plan Better
+            Never Miss What&apos;s
           </ScrollFloat>
 
-          {/* Separate element for 'Together' so we can render it on its own line with a hand-drawn underline */}
           <h2 className="text-6xl md:text-8xl font-bold tracking-tighter mb-8 text-gray-900">
             <span className="relative inline-block">
-              <span className="relative z-10">Together</span>
+              <span className="relative z-10">Happening Nearby</span>
 
               <svg
                 aria-hidden="true"
@@ -69,14 +80,14 @@ export default function Home() {
               </svg>
             </span>
           </h2>
-          
+
           <div className="text-2xl md:text-3xl text-gray-500 flex flex-col md:flex-row items-center justify-center gap-3 mb-6">
-            <span className="uppercase tracking-[0.3em] text-xs md:text-sm text-orange-600">Instant Programs</span>
+            <span className="uppercase tracking-[0.3em] text-xs md:text-sm text-orange-600">Discover</span>
             <RotatingText
               texts={[
-                'Freshers mixers with live RSVPs',
-                'Hackathons with sponsor dashboards',
-                'Panel nights with verified entry'
+                'Coffee meetups 500m away',
+                'Study sessions in the library',
+                'Society socials happening tonight'
               ]}
               splitBy="words"
               className="text-center md:text-left font-semibold text-gray-900"
@@ -84,7 +95,7 @@ export default function Home() {
           </div>
 
           <p className="text-xl md:text-2xl text-gray-500 max-w-2xl mx-auto mb-12 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}>
-            Draft agendas, assign crews, publish tickets, and watch attendance pulse in one backstage view made for student societies.
+            University event discovery for Bath students. Find events on a map, filter by time and distance, RSVP instantly, and help societies reach beyond their existing followers.
           </p>
           
           <div className="flex flex-col md:flex-row gap-4 justify-center opacity-0 animate-fade-in-up" style={{ animationDelay: '0.8s', animationFillMode: 'forwards' }}>
@@ -107,38 +118,38 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Event & Data Stack Section */}
+      {/* Features Section */}
       <section className="py-28 border-t border-gray-100 bg-gradient-to-b from-gray-50 to-white">
         <div className="container mx-auto px-6">
           <div className="grid md:grid-cols-2 gap-16 items-start">
             <div>
-              <p className="text-sm uppercase tracking-[0.3em] text-orange-600 mb-4">Orchestrate</p>
-              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900">Set an event in three swipes</h2>
+              <p className="text-sm uppercase tracking-[0.3em] text-orange-600 mb-4">For Students</p>
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900">Discover events your way</h2>
               <ScrollReveal
                 containerClassName="mb-8"
                 textClassName="text-gray-500 text-lg leading-relaxed"
               >
-                Load preset templates for mixers, panels, or hackathons, assign crews, and publish branded passes without toggling tools.
+                No more scrolling through Instagram stories or checking five different group chats. See every campus event in one place, filtered to what matters to you right now.
               </ScrollReveal>
               <div className="space-y-6">
                 {[
                   {
-                    title: 'Unified brief',
-                    description: 'Drop logistics, run of show, and sponsor asks into one live doc that updates everyone.',
-                    badge: 'Uninear',
-                    footer: 'Syncs with Notion · ClickUp'
+                    title: 'Map & list views',
+                    description: 'See events pinned on an interactive campus map, or browse a filterable list. Tap any event for full details.',
+                    badge: 'UniNear',
+                    footer: 'Powered by real-time location data'
                   },
                   {
-                    title: 'Crew automations',
-                    description: 'Auto-sync rosters to WhatsApp, Teams, or email with shift reminders.',
-                    badge: 'uninear',
-                    footer: 'Hands-off scheduling pulses'
+                    title: 'Smart filtering',
+                    description: 'Filter by distance (100m, 500m, 1km), time window (next 2 hours, today, this week), or search by keyword.',
+                    badge: 'UniNear',
+                    footer: 'Find what fits your schedule'
                   },
                   {
-                    title: 'Instant RSVPs',
-                    description: 'Track capacity and waitlists in real time as invites go out.',
-                    badge: 'uninear',
-                    footer: 'Streams straight into analytics'
+                    title: 'One-tap RSVP',
+                    description: 'RSVP instantly with live capacity tracking. Cancel anytime. View all your upcoming events in one place.',
+                    badge: 'UniNear',
+                    footer: 'Real-time attendee counts'
                   }
                 ].map(card => (
                   <SpotlightCard key={card.title} {...card} />
@@ -147,21 +158,21 @@ export default function Home() {
             </div>
 
             <div>
-              <p className="text-sm uppercase tracking-[0.3em] text-pink-600 mb-4">Read the room</p>
-              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900">Data made social</h2>
+              <p className="text-sm uppercase tracking-[0.3em] text-pink-600 mb-4">For Organisers</p>
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900">Reach beyond your followers</h2>
               <ScrollReveal
                 containerClassName="mb-8"
                 textClassName="text-gray-500 text-lg leading-relaxed"
                 baseRotation={12}
               >
-                Dashboards roll up attendance and engagement so exec teams know what to scale next.
+                Society events shouldn&apos;t only reach people who already follow you. Publish to every student on campus and track who&apos;s coming in real time.
               </ScrollReveal>
               <div className="grid grid-cols-2 gap-6">
                 {[
-                  { label: 'Live check-ins', value: '482', detail: 'across 4 venues', accent: 'bg-orange-100 text-orange-600' },
-                  { label: 'Active Members', value: '1,240', detail: 'logged this week', accent: 'bg-blue-100 text-blue-600' },
-                  { label: 'Feedback forms', value: '73%', detail: 'response rate', accent: 'bg-emerald-100 text-emerald-600' },
-                  { label: 'Sponsor reach', value: '1.2M', detail: 'impressions', accent: 'bg-pink-100 text-pink-600' }
+                  { label: 'Event Creation', value: 'Full', detail: 'title, location, capacity, tags', accent: 'bg-orange-100 text-orange-600' },
+                  { label: 'Map Picker', value: 'Pin', detail: 'drop a pin for your venue', accent: 'bg-blue-100 text-blue-600' },
+                  { label: 'RSVP Tracking', value: 'Live', detail: 'see who registered', accent: 'bg-emerald-100 text-emerald-600' },
+                  { label: 'Draft & Publish', value: 'Flow', detail: 'prepare, then go live', accent: 'bg-pink-100 text-pink-600' }
                 ].map(card => (
                   <div key={card.label} className="border border-gray-200 rounded-3xl p-6 bg-white shadow-sm">
                     <div className={`w-10 h-10 ${card.accent} rounded-full mb-4 flex items-center justify-center font-bold`} />
@@ -176,32 +187,39 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Credential Showcase Section */}
-      <section className="py-32 relative overflow-hidden bg-gray-50">
+      {/* About Section */}
+      <section id="about" className="py-32 relative overflow-hidden bg-gray-50">
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-center gap-16">
             <div className="w-full md:w-1/2">
-              <p className="text-sm uppercase tracking-[0.3em] text-orange-600 mb-4">Entry Flow</p>
-              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900">Event management that just works</h2>
+              <p className="text-sm uppercase tracking-[0.3em] text-orange-600 mb-4">Why UniNear</p>
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900">The problem we&apos;re solving</h2>
+              <p className="text-gray-500 text-lg mb-6">
+                44% of UK university students report feeling lonely. Yet campus life is full of events — they&apos;re just invisible. Event information is fragmented across Instagram stories, society emails, WhatsApp groups, and word of mouth.
+              </p>
               <p className="text-gray-500 text-lg mb-8">
-                Allowing for attendence management and regulation wihile not compromising student experience or inference.
+                Students experience search fatigue and miss events happening metres away. Societies struggle to reach anyone beyond their existing followers. UniNear solves both sides: a single, location-aware source for campus events with real-time social proof.
               </p>
               <ul className="space-y-4 text-gray-700">
                 <li className="flex items-center gap-3">
                   <div className="w-2 h-2 bg-orange-600 rounded-full" />
-                  Real time counts
+                  @bath.ac.uk verified — exclusively for University of Bath
                 </li>
                 <li className="flex items-center gap-3">
                   <div className="w-2 h-2 bg-orange-600 rounded-full" />
-                  Scalable events
+                  Cross-platform — web dashboard and mobile app
                 </li>
                 <li className="flex items-center gap-3">
                   <div className="w-2 h-2 bg-orange-600 rounded-full" />
-                  Build in event inference
+                  Built with FastAPI, Next.js, React Native, and Supabase
+                </li>
+                <li className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-orange-600 rounded-full" />
+                  CM22007 Software Engineering — University of Bath, 2026
                 </li>
               </ul>
             </div>
-            
+
             <div className="w-full md:w-1/2 flex justify-center perspective-1000">
               <ReflectiveCard />
             </div>
@@ -214,7 +232,7 @@ export default function Home() {
         <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center">
           <div className="text-2xl font-bold tracking-tighter mb-4 md:mb-0 text-gray-900">UNINEAR</div>
           <div className="text-gray-500 text-sm">
-            © 2025 Uninear. All rights reserved.
+            © 2026 UniNear. All rights reserved.
           </div>
         </div>
       </footer>

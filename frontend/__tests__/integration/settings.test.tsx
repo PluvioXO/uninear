@@ -1,7 +1,6 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import SettingsPage from '../../app/organizer/settings/page'
 import { logout } from '../../lib/auth'
-
 // Mock MagneticButton
 jest.mock('../../components/MagneticButton', () => {
   return function MockMagneticButton({ label, onClick }: { label: string, onClick?: () => void }) {
@@ -14,38 +13,50 @@ jest.mock('../../lib/auth', () => ({
   logout: jest.fn(),
 }))
 
+// Mock api to return profile data
+jest.mock('../../lib/api', () => ({
+  getProfile: jest.fn().mockResolvedValue({
+    email: 'test@bath.ac.uk',
+    full_name: 'Test User',
+    bio: '',
+    location: '',
+    interests: [],
+    society_name: 'Tech Society',
+    society_description: 'A tech community',
+    contact_email: 'hello@techsoc.edu',
+    website: 'https://techsoc.edu',
+    notification_prefs: {},
+  }),
+  updateProfile: jest.fn().mockResolvedValue({ ok: true }),
+}))
+
 describe('Settings Page', () => {
-  it('renders the sidebar tabs', () => {
+  it('renders the sidebar tabs', async () => {
     render(<SettingsPage />)
-    expect(screen.getByText('General')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('General')).toBeInTheDocument())
     expect(screen.getByText('Notifications')).toBeInTheDocument()
-    expect(screen.getByText('Team Members')).toBeInTheDocument()
+    expect(screen.queryByText('Team Members')).not.toBeInTheDocument()
     expect(screen.queryByText('Billing & Plan')).not.toBeInTheDocument()
   })
 
-  it('defaults to the General tab', () => {
+  it('defaults to the General tab with profile data', async () => {
     render(<SettingsPage />)
-    expect(screen.getByText('Society Profile')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Society Profile')).toBeInTheDocument())
     expect(screen.getByDisplayValue('Tech Society')).toBeInTheDocument()
   })
 
-  it('switches to Notifications tab', () => {
+  it('switches to Notifications tab', async () => {
     render(<SettingsPage />)
+    await waitFor(() => expect(screen.getByText('Notifications')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Notifications'))
     expect(screen.getByText('Notification Preferences')).toBeInTheDocument()
     expect(screen.getByText('New Event Signups')).toBeInTheDocument()
   })
 
-  it('switches to Team Members tab', () => {
-    render(<SettingsPage />)
-    fireEvent.click(screen.getByText('Team Members'))
-    expect(screen.getByRole('heading', { name: 'Team Members', level: 2 })).toBeInTheDocument()
-    expect(screen.getByText('Alex Thompson')).toBeInTheDocument()
-  })
-
-  it('calls logout when Sign Out is clicked', () => {
+  it('calls logout when Sign Out is clicked', async () => {
     const mockedLogout = logout as jest.MockedFunction<typeof logout>
     render(<SettingsPage />)
+    await waitFor(() => expect(screen.getByText('Sign Out')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Sign Out'))
     expect(mockedLogout).toHaveBeenCalled()
   })

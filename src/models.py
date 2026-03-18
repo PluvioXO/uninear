@@ -105,3 +105,16 @@ class EventAttendanceResponseSchema(BaseModel):
     event_id: int
     user_id: str
     created_at: datetime
+
+
+class UserProfileUpdateSchema(BaseModel):
+    full_name: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    interests: Optional[List[str]] = None
+    avatar_url: Optional[str] = None
+    society_name: Optional[str] = None
+    society_description: Optional[str] = None
+    contact_email: Optional[str] = None
+    website: Optional[str] = None
+    notification_prefs: Optional[dict] = None

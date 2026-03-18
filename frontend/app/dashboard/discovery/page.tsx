@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { fetchEvents, type EventResponse, getUserRsvps } from '@/lib/api';
+import { fetchEvents, type EventResponse, getUserRsvps, fetchRecentActivity, type ActivityItem } from '@/lib/api';
 import { getSupabase } from '@/lib/supabase';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
@@ -62,6 +62,7 @@ export default function DiscoveryPage() {
   const [activeSearch, setActiveSearch] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
   const [rsvpdEvents, setRsvpdEvents] = useState<number[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadEvents = useCallback(async (radius?: number | null, time?: string | null, search?: string) => {
@@ -90,6 +91,7 @@ export default function DiscoveryPage() {
   }, []);
 
   useEffect(() => { loadEvents(radiusFilter, timeFilter, activeSearch); }, [radiusFilter, timeFilter, activeSearch, loadEvents]);
+  useEffect(() => { fetchRecentActivity().then(setActivity); }, []);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
@@ -325,17 +327,14 @@ export default function DiscoveryPage() {
               Recent Activity
             </h2>
             <div className="border border-gray-200 rounded-2xl bg-white shadow-sm p-1">
-              {[
-                { user: 'Tech Hackathon', action: 'has reached max attendance', target: '', time: '15m ago' },
-                { user: 'Tech Society', action: 'updated event', target: 'Tech Hackathon', time: '3h ago' },
-                { user: 'CS Society', action: 'published event', target: 'Campus Meetup', time: '4h ago' },
-                { user: 'Tech Society', action: 'published event', target: 'Tech Hackathon', time: '7h ago' }
-              ].map((activity, i) => (
+              {activity.length === 0 ? (
+                <div className="p-3 text-sm text-gray-400">No recent activity</div>
+              ) : activity.map((item, i) => (
                 <div key={i} className="p-3 hover:bg-gray-50 rounded-xl transition-colors border-b last:border-0 border-gray-100">
                   <p className="text-sm text-gray-600">
-                    <span className="font-bold text-gray-900">{activity.user}</span> {activity.action} {activity.target && <span className="text-orange-600 font-medium">{activity.target}</span>}
+                    <span className="font-bold text-gray-900">{item.user}</span> {item.action} {item.target && <span className="text-orange-600 font-medium">{item.target}</span>}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
+                  <p className="text-xs text-gray-400 mt-1">{item.time}</p>
                 </div>
               ))}
             </div>
