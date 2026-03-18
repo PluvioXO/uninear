@@ -118,19 +118,19 @@ class UniNearBackend:
         self.app.post("/auth/signup")(self.signup)
         self.app.post("/auth/login")(self.login)
         self.app.post("/auth/forgot-password")(self.forgot_password)
-        self.app.delete("/auth/account", dependencies=[Depends(verify_token)])(self.delete_account)
         self.app.get("/events", response_model=list[EventResponseSchema])(self.get_events)
 
         # Protected endpoints (require valid JWT)
         auth = [Depends(verify_token)]
+        self.app.delete("/auth/account", dependencies=auth)(self.delete_account)
         self.app.post("/events", dependencies=auth)(self.create_event)
         self.app.delete("/events/{event_id}", dependencies=auth)(self.delete_event)
         self.app.patch("/events/{event_id}", dependencies=auth)(self.update_event)
+        self.app.get("/api/organizer/events", dependencies=auth)(self.get_organizer_events)
         self.app.post("/api/rsvp", status_code=201, dependencies=auth)(self.create_rsvp)
         self.app.delete("/events/{event_id}/rsvp", dependencies=auth)(self.cancel_rsvp)
         self.app.get("/api/rsvp", dependencies=auth)(self.get_rsvps)
         self.app.get("/api/events/{event_id}/rsvps", dependencies=auth)(self.get_event_rsvps)
-        self.app.get("/api/organizer/events", dependencies=auth)(self.get_organizer_events)
 
     def read_root(self):
         return {"status": "UniNear API is Live 🚀"}
@@ -148,7 +148,7 @@ class UniNearBackend:
             response = (
                 self.db.client
                 .table("events")
-                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, mood_tags, energy_level, latitude, longitude")
+                .select("id, title, description, location, start_time, end_time, capacity, attendee_count, status, organizer, mood_tags, energy_level, latitude, longitude")
                 .eq("status", "Published")
                 .gte("start_time", now.isoformat())
                 .order("start_time")
@@ -200,6 +200,8 @@ class UniNearBackend:
             event_data = event.model_dump(exclude_none=True)
             if 'date' in event_data:
                 event_data['start_time'] = event_data.pop('date').isoformat()
+            if 'end_date' in event_data:
+                event_data['end_time'] = event_data.pop('end_date').isoformat()
             event_data['organiser_id'] = user['user_id']
 
             # Use admin client to bypass RLS insert policy (the anon-key client
@@ -232,7 +234,9 @@ class UniNearBackend:
 
             event_data = event.model_dump(exclude_unset=True)
             if 'date' in event_data and event_data['date']:
-                 event_data['start_time'] = event_data.pop('date').isoformat()
+                event_data['start_time'] = event_data.pop('date').isoformat()
+            if 'end_date' in event_data and event_data['end_date']:
+                event_data['end_time'] = event_data.pop('end_date').isoformat()
 
             response = db.table("events").update(event_data).eq("id", event_id).execute()
             if not response.data:
@@ -417,7 +421,7 @@ class UniNearBackend:
             db = self.db.admin or self.db.client
             response = (
                 db.table("events")
-                .select("id, title, description, location, start_time, capacity, attendee_count, status, organizer, mood_tags, energy_level, latitude, longitude")
+                .select("id, title, description, location, start_time, end_time, capacity, attendee_count, status, organizer, mood_tags, energy_level, latitude, longitude")
                 .eq("organiser_id", user["user_id"])
                 .execute()
             )

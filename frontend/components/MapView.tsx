@@ -20,9 +20,9 @@ const DEFAULT_ZOOM = 14;
 export interface MapEvent {
   id: number;
   title: string;
-  date: string;
+  date?: string;
   location: string;
-  attendees: number;
+  attendees?: number;
   latitude?: number;
   longitude?: number;
 }
@@ -75,20 +75,26 @@ export default function MapView({ events }: MapViewProps) {
     events.forEach((event) => {
       if (event.latitude == null || event.longitude == null) return;
 
-      const formattedTime = new Date(event.date).toLocaleString([], {
+      const formattedTime = new Date(String(event.date)).toLocaleString([], {
         dateStyle: 'medium',
         timeStyle: 'short',
       });
 
       const marker = L.marker([event.latitude, event.longitude]).addTo(map);
 
+      // If viewing map through single event page, zoom in on event and do not bind popup
+      if (!event.date) {
+        map.setView(marker.getLatLng(), 17); //Zoom level 17, ~8 times more zoomed than normal
+        return;
+      }
+
       marker.bindPopup(
         `<div style="min-width:180px">
           <strong style="font-size:14px">${escapeHtml(event.title)}</strong><br/>
           <span style="color:#666;font-size:12px">${escapeHtml(formattedTime)}</span><br/>
-          <span style="color:#666;font-size:12px">${event.attendees} attendees</span><br/>
+          <span style="color:#666;font-size:12px">${event.attendees} attending</span><br/>
           <a
-            href="/dashboard/events/${event.id}"
+            href="/dashboard/discovery/${event.id}"
             style="display:inline-block;margin-top:6px;padding:4px 12px;background:#ea580c;color:white;text-decoration:none;border-radius:6px;font-size:12px"
           >
             View Details
@@ -102,7 +108,7 @@ export default function MapView({ events }: MapViewProps) {
     <div
       ref={mapRef}
       data-testid="map-container"
-      style={{ width: '100%', height: '500px', borderRadius: '16px' }}
+      style={{ width: '100%', height: '500px', borderRadius: '16px', position: 'sticky' }}
     />
   );
 }

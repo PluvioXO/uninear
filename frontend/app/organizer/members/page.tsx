@@ -71,28 +71,6 @@ export default function MembersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden">
-      <nav className="fixed top-0 w-full z-50 bg-white/50 backdrop-blur-md border-b border-gray-200">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="text-2xl font-bold tracking-tighter text-orange-600">UNINEAR</Link>
-            <div className="hidden md:flex space-x-6 text-sm font-medium">
-              <Link href="/dashboard" className="text-gray-500 hover:text-gray-900 transition-colors">Overview</Link>
-              <Link href="/dashboard/events" className="text-gray-500 hover:text-gray-900 transition-colors">Events</Link>
-              <Link href="/dashboard/members" className="text-gray-900 font-semibold">Members</Link>
-              <Link href="/dashboard/analytics" className="text-gray-500 hover:text-gray-900 transition-colors">Analytics</Link>
-              <Link href="/dashboard/settings" className="text-gray-500 hover:text-gray-900 transition-colors">Settings</Link>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="hidden md:block text-right">
-              <p className="text-sm font-medium text-gray-900">Tech Society</p>
-              <p className="text-xs text-gray-500">President</p>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 border border-gray-200" />
-          </div>
-        </div>
-      </nav>
-
       <main className="relative z-10 container mx-auto px-6 pt-28 pb-12">
         <div className="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>

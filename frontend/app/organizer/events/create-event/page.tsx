@@ -2,8 +2,19 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { createEvent } from '@/lib/api';
+import parse from 'parse-duration';
+
+const MapSelect = dynamic(() => import('@/components/MapSelect'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[500px] border border-gray-200 rounded-2xl bg-white">
+      <div className="animate-pulse text-gray-400">Loading map...</div>
+    </div>
+  ),
+});
 
 export default function CreateEventPage() {
   const router = useRouter();
@@ -28,11 +39,31 @@ export default function CreateEventPage() {
     setIsSubmitting(true);
 
     try {
-      const dateTime = `${formData.date}T${formData.time}:00`;
+      if (document.getElementById('lat') == null) {
+        setError("Please use the map to set your event's location");
+        return;
+      }
+
+      const dateTime = new Date(`${formData.date}T${formData.time}:00`);
+      if (dateTime.getTime() <= Date.now()) {
+        setError("Please set your event's date and time to be in the future.");
+        return;
+      }
+
+      const durationMS = parse(formData.length); //Event duration, in milliseconds
+      if (durationMS == null || durationMS <= 0) {
+        setError("Please set a valid duration for your event.");
+        return;
+      }
+      const endDateTime = new Date(dateTime.getTime() + durationMS);
+
       const res = await createEvent({
         title: formData.title,
-        date: new Date(dateTime).toISOString(),
+        date: dateTime.toISOString(),
+        end_date: endDateTime.toISOString(),
         location: formData.location,
+        latitude: Number(document.getElementById('lat')?.getAttribute('value')),
+        longitude: Number(document.getElementById('lng')?.getAttribute('value')),
         organizer: formData.organizer,
         capacity: Number(formData.capacity) || 0,
         description: formData.description || undefined,
@@ -46,7 +77,7 @@ export default function CreateEventPage() {
         return;
       }
 
-      router.push('/organizer');
+      router.push('/organizer/events');
     } catch {
       setError('Network error. Please check your connection.');
     } finally {
@@ -63,7 +94,7 @@ export default function CreateEventPage() {
     <div className="min-h-screen bg-gray-50 text-gray-900 p-8 pt-24">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
-          <Link href="/organizer" className="text-gray-500 hover:text-gray-900 mb-4 inline-block">← Back to Dashboard</Link>
+          <Link href="/organizer/events" className="text-gray-500 hover:text-gray-900 mb-4 inline-block">← Back to Dashboard</Link>
           <h1 className="text-4xl font-bold">Create New Event</h1>
         </div>
 
@@ -106,31 +137,35 @@ export default function CreateEventPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-500 mb-2">Location</label>
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
-                placeholder="e.g. Engineering Hub, Room 301"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-500 mb-2">Society Name</label>
-              <input
-                type="text"
-                name="organizer"
-                value={formData.organizer}
-                onChange={handleChange}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
-                placeholder="e.g. Tech Society"
-                required
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-500 mb-2">Location Name</label>
+            <input
+              type="text"
+              name="location"
+              value={formData.location}
+              onChange={handleChange}
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
+              placeholder="e.g. Engineering Hub, Room 301"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-500 mb-2">Location Coordinates</label>
+            <MapSelect />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-500 mb-2">Society Name</label>
+            <input
+              type="text"
+              name="organizer"
+              value={formData.organizer}
+              onChange={handleChange}
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
+              placeholder="e.g. Tech Society"
+              required
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -148,7 +183,7 @@ export default function CreateEventPage() {
               <p className="text-xs text-gray-400 mt-1">Leave blank for unlimited capacity</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-2">Length</label>
+              <label className="block text-sm font-medium text-gray-500 mb-2">Duration</label>
               <input
                 type="text"
                 name="length"
@@ -223,7 +258,7 @@ export default function CreateEventPage() {
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
-              Event created successfully! Redirecting...
+              Redirecting...
             </div>
           )}
 

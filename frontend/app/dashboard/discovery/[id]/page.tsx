@@ -3,8 +3,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { fetchEvents, formatEventFetchErrorMessage, rsvpToEvent, cancelRsvp, getUserRsvps, type EventResponse } from '@/lib/api';
+import dynamic from 'next/dynamic';
+import { fetchEvents, rsvpToEvent, cancelRsvp, getUserRsvps, type EventResponse } from '@/lib/api';
 import { getSupabase } from '@/lib/supabase';
+
+const MapView = dynamic(() => import('@/components/MapView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[500px] border border-gray-200 rounded-2xl bg-white">
+      <div className="animate-pulse text-gray-400">Loading map...</div>
+    </div>
+  ),
+});
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -48,8 +58,8 @@ export default function EventDetailPage() {
           return;
         }
         setEvent(found);
-      } catch (error) {
-        setError(formatEventFetchErrorMessage(error));
+      } catch {
+        setError('Failed to load event details');
       } finally {
         setLoading(false);
       }
@@ -151,46 +161,66 @@ export default function EventDetailPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
         <p className="text-red-600">{error ?? 'Event not found'}</p>
-        <Link href="/dashboard" className="text-orange-600 hover:text-orange-700 font-medium">
-          Back to Dashboard
+        <Link href="/dashboard/discovery" className="text-orange-600 hover:text-orange-700 font-medium">
+          Back to Discovery
         </Link>
       </div>
     );
   }
 
   const eventDate = new Date(event.start_time);
+  const eventEndDate = new Date(String(event.end_time));
   const isFull = event.capacity > 0 && event.attendee_count >= event.capacity;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-8 pt-24">
       <div className="max-w-3xl mx-auto">
-        <Link href="/dashboard" className="text-gray-500 hover:text-gray-900 mb-6 inline-block">
-          &larr; Back to Dashboard
-        </Link>
-
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8">
-          <h1 className="text-3xl font-bold mb-4" data-testid="event-title">{event.title}</h1>
+          <h1 className="text-3xl font-bold" data-testid="event-title">{event.title}</h1>
+          <i data-testid="society-name">{event.organizer}</i>
 
           <div className="space-y-3 mb-6 text-gray-600">
             <p data-testid="event-date">
               {eventDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               {' \u2022 '}
               {eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </p>
-            <p data-testid="event-location">{event.location}</p>
-            <p data-testid="event-attendees">
-              {event.capacity > 0
-                ? `${event.attendee_count} / ${event.capacity} attending`
-                : `${event.attendee_count} attending`}
+              {event.end_time && (
+                <>
+                  {' \u2014 '}
+                  {eventEndDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  {' \u2022 '}
+                  {eventEndDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </>
+              )}
             </p>
           </div>
 
+          {event.mood_tags && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-2">Moods</h2>
+              <ul className="text-gray-600" data-testid="event-mood">{event.mood_tags.join(", ")}</ul>
+            </div>
+          )}
+
+          {event.energy_level && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-2">Energy Level</h2>
+              <p className="text-gray-600" data-testid="event-energy">{event.energy_level}</p>
+            </div>
+          )}
+
           {event.description && (
-            <div className="mb-8">
-              <h2 className="text-lg font-semibold mb-2">About</h2>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-2">Description</h2>
               <p className="text-gray-600" data-testid="event-description">{event.description}</p>
             </div>
           )}
+
+          <div className='mb-6'>
+            <h2 className="text-lg font-semibold mb-2">Location</h2>
+            <p className='mb-2' data-testid="event-location">{event.location}</p>
+            <MapView events={[event]} />
+          </div>
 
           {/* RSVP Section */}
           <div className="border-t border-gray-200 pt-6">
@@ -227,8 +257,20 @@ export default function EventDetailPage() {
                 {rsvpLoading
                   ? 'Processing...'
                   : hasRsvpd
-                    ? 'Cancel RSVP'
-                    : 'RSVP'}
+                    ? <p>
+                        Cancel RSVP
+                        <br/>
+                        {event.capacity > 0
+                          ? `${event.attendee_count} / ${event.capacity} attending`
+                          : `${event.attendee_count} attending`}
+                      </p>
+                    : <p>
+                        RSVP
+                        <br/>
+                        {event.capacity > 0
+                          ? `${event.attendee_count} / ${event.capacity} attending`
+                          : `${event.attendee_count} attending`}
+                      </p>}
               </button>
             )}
           </div>

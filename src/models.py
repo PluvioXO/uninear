@@ -6,6 +6,7 @@ class EventCreateSchema(BaseModel):
     title: str
     description: Optional[str] = None
     date: datetime  # Frontend sends 'date'
+    end_date: Optional[datetime] = None
     location: str
     capacity: int = 0
     status: str = "Draft"
@@ -23,6 +24,7 @@ class EventUpdateSchema(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     location: Optional[str] = None
     capacity: Optional[int] = None
     status: Optional[str] = None
@@ -83,6 +85,7 @@ class EventResponseSchema(BaseModel):
     description: Optional[str] = None
     location: str
     start_time: datetime
+    end_time: Optional[datetime] = None
     capacity: int
     attendee_count: int
     status: str = "Published"
