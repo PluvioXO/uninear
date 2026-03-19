@@ -534,7 +534,8 @@ class UniNearBackend:
                 "password": user.password,
                 "options": {
                     "data": {
-                        "full_name": user.full_name
+                        "full_name": user.full_name,
+                        "society_name": user.society_name
                     }
                 }
             })

@@ -2,21 +2,23 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/useRequireAuth';
-import { getSupabase } from '@/lib/supabase';
+import { getProfile } from '@/lib/api';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useRequireAuth();
-  const [fullName, setName] = useState<string | null>(null);
+  const [fullName, setFullName] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  // Get current user's full name
+  // Get current user's full name and avatar url
   useEffect(() => {
-    getSupabase().auth.getSession().then(({ data }) => {
-      if (data.session?.user) {
-        setName(data.session.user.user_metadata['full_name']);
-      }
-    });
+    getProfile()
+      .then((profile) => {
+        setFullName(profile.full_name || '');
+        setAvatarUrl((profile as any).avatar_url || null);
+      })
+      .catch(() => {});
   }, []);
 
   if (loading) {
@@ -51,7 +53,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="hidden md:block text-right">
               <p className="text-sm font-medium text-gray-900">{fullName}</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 border border-gray-200" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full border border-gray-200" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 border border-gray-200" />
+            )}
           </div>
         </div>
       </nav>

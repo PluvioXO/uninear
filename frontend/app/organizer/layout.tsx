@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRequireAuth } from '@/lib/useRequireAuth';
-import { getSupabase } from '@/lib/supabase';
+import { getProfile } from '@/lib/api';
 import Link from 'next/link';
 import MagneticButton from '@/components/MagneticButton';
 
@@ -10,15 +10,17 @@ export default function OrganizerLayout({ children }: { children: React.ReactNod
   const { loading } = useRequireAuth();
   const [societyName, setSocietyName] = useState<string | null>(null);
   const [fullName, setFullName] = useState<string | null>(null);
-
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  
+  // Get current user's society name, full name, and avatar url
   useEffect(() => {
-    getSupabase().auth.getSession().then(({ data }) => {
-      if (data.session?.user) {
-        const meta = data.session.user.user_metadata;
-        setSocietyName(meta?.society_name || null);
-        setFullName(meta?.full_name || null);
-      }
-    });
+    getProfile()
+      .then((profile) => {
+        setSocietyName(profile.society_name || '')
+        setFullName(profile.full_name || '');
+        setAvatarUrl((profile as any).avatar_url || null);
+      })
+      .catch(() => {});
   }, []);
 
   if (loading) {
@@ -50,10 +52,14 @@ export default function OrganizerLayout({ children }: { children: React.ReactNod
               type="button"
             />
             <div className="hidden md:block text-right">
-              <p className="text-sm font-medium text-gray-900">{societyName || fullName || 'Organiser'}</p>
-              <p className="text-xs text-gray-500">Organiser</p>
+              <p className="text-sm font-medium text-gray-900">{societyName}</p>
+              <p className="text-xs text-gray-500">{fullName}</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 border border-gray-200" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full border border-gray-200" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 border border-gray-200" />
+            )}
           </div>
         </div>
       </nav>

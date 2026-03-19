@@ -32,7 +32,7 @@ export default function EventDetailPage() {
   const [rsvpMessage, setRsvpMessage] = useState<string | null>(null);
   const [rsvpError, setRsvpError] = useState<string | null>(null);
 
-  // Get current user
+  // Get current user ID
   useEffect(() => {
     getSupabase().auth.getSession().then(({ data }) => {
       if (data.session?.user) {
@@ -218,7 +218,7 @@ export default function EventDetailPage() {
 
           <div className='mb-6'>
             <h2 className="text-lg font-semibold mb-2">Location</h2>
-            <p className='mb-2' data-testid="event-location">{event.location}</p>
+            <p className='mb-2 text-gray-600' data-testid="event-location">{event.location}</p>
             <MapView events={[event]} />
           </div>
 

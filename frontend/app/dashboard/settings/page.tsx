@@ -47,7 +47,7 @@ export default function SettingsPage() {
 
   const showSaved = (msg: string) => {
     setSaveMessage(msg);
-    setTimeout(() => setSaveMessage(''), 2000);
+    setTimeout(() => window.location.reload(), 2000);
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

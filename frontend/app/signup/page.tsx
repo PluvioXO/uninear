@@ -35,7 +35,7 @@ export default function SignupPage() {
 
     try {
       const { data, error: authError } = await signup(email, password, {
-        metadata: { full_name: name, society },
+        metadata: { full_name: name, society_name: society },
       });
 
       if (authError) {

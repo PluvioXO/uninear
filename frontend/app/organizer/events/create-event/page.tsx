@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { createEvent } from '@/lib/api';
+import { createEvent, getProfile } from '@/lib/api';
 import parse from 'parse-duration';
 
 const MapSelect = dynamic(() => import('@/components/MapSelect'), {
@@ -23,7 +23,6 @@ export default function CreateEventPage() {
     date: '',
     time: '',
     location: '',
-    organizer: '',
     capacity: '',
     description: '',
     moods: '',
@@ -32,6 +31,16 @@ export default function CreateEventPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [societyName, setSocietyName] = useState<string | null>(null);
+
+  // Get current user's society name
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        setSocietyName(profile.society_name || '')
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +48,11 @@ export default function CreateEventPage() {
     setIsSubmitting(true);
 
     try {
+      if (!societyName || societyName == '') {
+        setError("Please set a society name in organiser settings before creating an event.");
+        return;
+      }
+
       if (document.getElementById('lat') == null) {
         setError("Please use the map to set your event's location");
         return;
@@ -64,7 +78,7 @@ export default function CreateEventPage() {
         location: formData.location,
         latitude: Number(document.getElementById('lat')?.getAttribute('value')),
         longitude: Number(document.getElementById('lng')?.getAttribute('value')),
-        organizer: formData.organizer,
+        organizer: societyName,
         capacity: Number(formData.capacity) || 0,
         description: formData.description || undefined,
         mood_tags: formData.moods ? formData.moods.split(',').map(s => s.trim()) : [],
@@ -153,19 +167,6 @@ export default function CreateEventPage() {
           <div>
             <label className="block text-sm font-medium text-gray-500 mb-2">Location Coordinates</label>
             <MapSelect />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-500 mb-2">Society Name</label>
-            <input
-              type="text"
-              name="organizer"
-              value={formData.organizer}
-              onChange={handleChange}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-orange-500 transition-colors"
-              placeholder="e.g. Tech Society"
-              required
-            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
