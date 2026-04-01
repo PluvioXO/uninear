@@ -15,9 +15,20 @@ jest.mock('next/link', () => {
   }
 })
 
+// Mock Supabase
+jest.mock('../../lib/supabase', () => ({
+  getSupabase: () => ({
+    auth: {
+      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
+    },
+  }),
+}))
+
 // Mock the API module
 jest.mock('../../lib/api', () => ({
   fetchEvents: jest.fn(),
+  fetchRecentActivity: jest.fn().mockResolvedValue([]),
+  getUserRsvps: jest.fn(),
   formatEventFetchErrorMessage: (error: { message?: string }) =>
     error.message?.startsWith('Failed to fetch events')
       ? error.message
@@ -187,7 +198,7 @@ describe('NFR-13: Map Integration', () => {
     render(<DiscoveryPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to fetch events: Network error')).toBeInTheDocument()
+      expect(screen.getByText('Unable to load events. Please try again.')).toBeInTheDocument()
     })
 
     fireEvent.click(screen.getByTestId('view-toggle-map'))

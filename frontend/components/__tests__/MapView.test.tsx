@@ -122,6 +122,6 @@ describe('MapView Component', () => {
     render(<MapView events={events} />)
 
     const popupHtml = mockBindPopup.mock.calls[0][0] as string
-    expect(popupHtml).toContain('75 attendees')
+    expect(popupHtml).toContain('75 attending')
   })
 })

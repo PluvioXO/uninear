@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import EventDetailPage from '../../app/events/[id]/page'
+import EventDetailPage from '../../app/dashboard/discovery/[id]/page'
 
 const mockPush = jest.fn()
 let mockParams: { id: string } = { id: '1' }
@@ -16,6 +16,13 @@ jest.mock('next/link', () => {
   }
 })
 
+// Mock MapView (Leaflet requires browser DOM APIs not available in jsdom)
+jest.mock('../../components/MapView', () => {
+  return function MockMapView() {
+    return <div data-testid="map-container" />
+  }
+})
+
 jest.mock('../../lib/supabase', () => ({
   getSupabase: () => ({
     auth: {
@@ -29,6 +36,7 @@ jest.mock('../../lib/api', () => {
   return {
     ...actual,
     fetchEvents: jest.fn(),
+    fetchRecentActivity: jest.fn().mockResolvedValue([]),
     rsvpToEvent: jest.fn(),
     cancelRsvp: jest.fn(),
     getUserRsvps: jest.fn(),
@@ -65,7 +73,7 @@ describe('Event detail page', () => {
     })
 
     expect(screen.getByTestId('event-location')).toHaveTextContent('Engineering Hub')
-    expect(screen.getByTestId('event-attendees')).toHaveTextContent('142 / 200 attending')
+    expect(screen.getByTestId('rsvp-button')).toHaveTextContent('142 / 200 attending')
     expect(screen.getByTestId('event-description')).toHaveTextContent('Build something amazing in 24 hours')
   })
 
@@ -95,7 +103,7 @@ describe('Event detail page', () => {
     render(<EventDetailPage />)
 
     expect(
-      await screen.findByText('Failed to fetch events from https://uninear-gvjz.vercel.app/events: Load failed (possible CORS/network issue)'),
+      await screen.findByText('Failed to load event details'),
     ).toBeInTheDocument()
   })
 })
